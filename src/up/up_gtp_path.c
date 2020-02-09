@@ -11,7 +11,7 @@
 
 Status GtpRouteInit() {
     Status status;
-    
+
     for (ApnNode *it = ListFirst(&Self()->apnList); it != NULL; it = ListNext(it)) {
         // TODO: only get the first dev here, there will be only one gtp tun dev in the future
         Gtpv1TunDevNode *gtpTunDev = ListFirst(&Self()->gtpv1DevList);
@@ -27,6 +27,8 @@ Status GtpRouteInit() {
     UTLT_Info("APN routes added, main routing table:");
     KnetPrintRoutes(routeEntries);
     KnetRtListFree(routeEntries);
+
+    UTLT_Free(routeEntries);
 
     return STATUS_OK;
 }

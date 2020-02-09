@@ -248,6 +248,7 @@ Status PfcpXactUpdateTx(PfcpXact *xact, PfcpHeader *header, Bufblk *bufBlk) {
     PfcpXactStage stage;
     PfcpHeader *localHeader = NULL;
     uint8_t headerLen = 0;
+    Bufblk *fullPacket;
 
     UTLT_Assert(xact, return STATUS_ERROR, "xact error");
     UTLT_Assert(xact->gnode, return STATUS_ERROR, "node of xact error");
@@ -296,18 +297,13 @@ Status PfcpXactUpdateTx(PfcpXact *xact, PfcpHeader *header, Bufblk *bufBlk) {
 
     if(header->type >= PFCP_SESSION_ESTABLISHMENT_REQUEST) { // with SEID
         headerLen = PFCP_HEADER_LEN;
-        bufBlk->buf -= headerLen;
-        bufBlk->len += headerLen;
-        bufBlk->size += headerLen;
     } else { // no SEID
         headerLen = PFCP_HEADER_LEN - PFCP_SEID_LEN;
-        bufBlk->buf -= headerLen;
-        bufBlk->len += headerLen;
-        bufBlk->size += headerLen;
     }
 
-    localHeader = bufBlk->buf;
-    UTLT_Assert(localHeader, return STATUS_ERROR, "buffer error");
+    fullPacket = BufblkAlloc(1, headerLen);
+    localHeader = fullPacket->buf;
+    fullPacket->len = headerLen;
 
     memset(localHeader, 0, headerLen);
     localHeader->version = PFCP_VERSION;
@@ -321,10 +317,13 @@ Status PfcpXactUpdateTx(PfcpXact *xact, PfcpHeader *header, Bufblk *bufBlk) {
         localHeader->sqn_only = PfcpTransactionId2Sqn(xact->transactionId);
     }
 
-    localHeader->length = htons(bufBlk->len - 4);
+    localHeader->length = htons(bufBlk->len + headerLen - 4);
+
+    BufblkBuf(fullPacket, bufBlk);
+    BufblkFree(bufBlk);
 
     xact->seq[xact->step].type = localHeader->type;
-    xact->seq[xact->step].bufBlk = bufBlk;
+    xact->seq[xact->step].bufBlk = fullPacket;
 
     xact->step++;
 

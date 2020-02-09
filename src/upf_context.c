@@ -153,6 +153,7 @@ Status UpfApnRemoveAll() {
     while (node) {
         nextNode = (ApnNode *)ListNext(node);
         ListRemove(&self.apnList, node);
+        UTLT_Free(node);
         node = nextNode;
     }
 
