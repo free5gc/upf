@@ -220,11 +220,10 @@ int _TlvParseMessage(void * msg, IeDescription * msgDes, void * buff, int buffLe
             if (dbf) { UTLT_Info("is TLV: %p", msg+msgPivot); }
             ((TlvOctet*)(msg+msgPivot))->presence = 1;
             ((TlvOctet*)(msg+msgPivot))->type = type;
-            Bufblk *newBuf = BufblkAlloc(1, length);
-            memcpy(newBuf->buf, buff + buffOffset + 2*sizeof(uint16_t), length);
-            newBuf->len = length;
+            void *newBuf = UTLT_Malloc(length);
+            memcpy(newBuf, buff + buffOffset + 2*sizeof(uint16_t), length);
             ((TlvOctet*)(msg+msgPivot))->len = length;
-            ((TlvOctet*)(msg+msgPivot))->value = newBuf->buf;
+            ((TlvOctet*)(msg+msgPivot))->value = newBuf;
             buffOffset += sizeof(uint16_t)*2 + length;
             msgPivot += sizeof(TlvOctet);
             continue;
@@ -423,9 +422,9 @@ int _TlvBuildMessage(Bufblk **bufBlkPtr, void *msg, IeDescription *ieDescription
                 //UTLT_Info("TL type[%d], pivot %d", ieDescriptionTable[ieDescription->next[idx]].msgType, msgPivot);
                 continue;
             }
-	    if (dbf) {
-                UTLT_Warning("tmpBuf T: %u, L: %d", ntohs(((uint16_t *)tmpBufBlkPtr->buf)[0]), ntohs(((uint16_t *)tmpBufBlkPtr->buf)[1]));
-	    }
+            if (dbf) {
+                    UTLT_Warning("tmpBuf T: %u, L: %d", ntohs(((uint16_t *)tmpBufBlkPtr->buf)[0]), ntohs(((uint16_t *)tmpBufBlkPtr->buf)[1]));
+            }
             BufblkBuf(*bufBlkPtr, tmpBufBlkPtr);
             //UTLT_Warning("bufBlk len %d", (*bufBlkPtr)->buf);
             BufblkFree(tmpBufBlkPtr);
@@ -548,7 +547,7 @@ Status _PfcpFreeIe(void *msg, IeDescription *ieDescription) {
     Status status = STATUS_OK;
 
     if (ieDescription->isTlvObj) {
-        status = BufblkFree(((TlvOctet*)msg)->value);
+        status = UTLT_Free(((TlvOctet*)msg)->value);
         UTLT_Assert(status == STATUS_OK, return STATUS_ERROR, "Free pfcp ie error");
         return STATUS_OK;
     }

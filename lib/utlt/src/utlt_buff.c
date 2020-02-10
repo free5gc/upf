@@ -77,10 +77,12 @@ int BufIsNotEnough(Bufblk *bufblk, uint32_t num, uint32_t size);
             UTLT_Assert((__bufblk)->buf, (__bufblk)->size = (__bufblk)->len = 0; return STATUS_ERROR, "bufPool"#__sizeNum" is empty"); \
             (__bufblk)->size = __sizeNum; \
             (__bufblk)->len = 0; \
+            /* UTLT_Warning("Memory Alloc Size["#__sizeNum"]");*/ \
             break; \
         case BUF_FREE : \
             PoolFree(&bufPool##__sizeNum, (bufPool##__sizeNum##_t *)(__bufblk)->buf); \
             (__bufblk)->size = (__bufblk)->len = 0; \
+            /* UTLT_Warning("Memory Free Size["#__sizeNum"]");*/ \
             break; \
         default : \
             (__bufblk)->size = (__bufblk)->len = 0; \
@@ -150,6 +152,33 @@ Status BufblkPoolFinal() {
     PoolTerminate(&bufPool65536);
 
     return STATUS_OK;
+}
+
+#define BufferCheck(__sizeNum) \
+    UTLT_Assert(PoolSize(&bufPool##__sizeNum) == PoolCap(&bufPool##__sizeNum),\
+        , "Memory leak happens in Bufblk"#__sizeNum" , need %d but only %d",\
+        PoolCap(&bufPool##__sizeNum), PoolSize(&bufPool##__sizeNum)); \
+
+void BufblkPoolCheck(const char *showInfo) {
+    UTLT_Info("Memory leak check start: %s", showInfo);
+
+    UTLT_Assert(PoolSize(&bufblkPool) == PoolCap(&bufblkPool),
+        , "Memory leak happens in BufblkPool, need %d but only %d",
+        PoolCap(&bufblkPool), PoolSize(&bufblkPool));
+
+    BufferCheck(64);
+    BufferCheck(128);
+    BufferCheck(256);
+    BufferCheck(512);
+    BufferCheck(1024);
+    BufferCheck(2048);
+    BufferCheck(4096);
+    BufferCheck(8192);
+    BufferCheck(16384);
+    BufferCheck(32768);
+    BufferCheck(65536);
+
+    UTLT_Info("Memory leak check end");
 }
 
 Bufblk *BufblkAlloc(uint32_t num, uint32_t size) {
@@ -292,24 +321,30 @@ Status BufblkAppend(Bufblk *bufblk, uint32_t num, uint32_t size) {
 
 void *UTLT_Malloc(uint32_t size) {
     Bufblk tmpBufblk;
-    UTLT_Assert(BufAlloc(&tmpBufblk, 1, size) == STATUS_OK,
+    uint32_t realSize = size + sizeof(uint32_t);
+    UTLT_Assert(BufAlloc(&tmpBufblk, 1, realSize) == STATUS_OK,
                 return NULL, "UTLT_Malloc fail");
 
-    return tmpBufblk.buf;
+    ((uint32_t *) tmpBufblk.buf)[0] = realSize;
+
+    return tmpBufblk.buf + sizeof(uint32_t);
 }
 
 void *UTLT_Calloc(uint32_t num, uint32_t size) {
     Bufblk tmpBufblk;
-    UTLT_Assert(BufAlloc(&tmpBufblk, num, size) == STATUS_OK,
+    uint32_t realSize = num * size + sizeof(uint32_t);
+    UTLT_Assert(BufAlloc(&tmpBufblk, 1, realSize) == STATUS_OK,
                 return NULL, "UTLT_Malloc fail");
 
-    return tmpBufblk.buf;
+    ((uint32_t *) tmpBufblk.buf)[0] = realSize;
+
+    return tmpBufblk.buf + sizeof(uint32_t);
 }
 
 Status UTLT_Free(void *buf) {
     Bufblk tmpBufblk;
     tmpBufblk.buf = buf;
-    tmpBufblk.size = sizeof(buf);
+    tmpBufblk.size = *(uint32_t *)(buf - sizeof(uint32_t));
 
     UTLT_Assert(BufFree(&tmpBufblk) == STATUS_OK, return STATUS_ERROR,
                 "UTLT_Free fail")
@@ -321,13 +356,13 @@ Status UTLT_Resize(void *buf, uint32_t size) {
     Bufblk tmpBufblk;
 
     tmpBufblk.buf = buf;
-    tmpBufblk.size = sizeof(buf);
+    tmpBufblk.size = *(uint32_t *)(buf - sizeof(uint32_t));
     tmpBufblk.len = tmpBufblk.size;
 
-    UTLT_Assert(BufblkResize(&tmpBufblk, 1, size) == STATUS_OK,
+    UTLT_Assert(BufblkResize(&tmpBufblk, 1, size + sizeof(uint32_t)) == STATUS_OK,
                 return STATUS_ERROR, "UTLT_Resize fail");
 
-    buf = tmpBufblk.buf;
+    buf = tmpBufblk.buf + sizeof(uint32_t);
 
     return STATUS_OK;
 }

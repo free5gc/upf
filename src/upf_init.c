@@ -149,6 +149,8 @@ Status UtltLibTerminate() {
     UTLT_Assert(ThreadFinal() == STATUS_OK, status |= STATUS_ERROR,
                 "Thread terminate failed");
 
+    BufblkPoolCheck("UPF Terminate");
+
     UTLT_Assert(BufblkPoolFinal() == STATUS_OK, status |= STATUS_ERROR,
                 "Bufblk pool terminate failed");
 
