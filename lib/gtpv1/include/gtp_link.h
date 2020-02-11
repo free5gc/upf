@@ -14,12 +14,13 @@
 typedef struct {
     ListNode node;
     char ip[INET6_ADDRSTRLEN], ifname[MAX_IFNAME_STRLEN];
-    Sock *sock1, *sockPrime;
+    Sock *sock;
 } Gtpv1TunDevNode;
 
 Status GtpLinkCreate(Gtpv1TunDevNode *node);
 Status GtpLinkFree(Gtpv1TunDevNode *node);
 
+// TODO: Need to translate to pdr and far
 Status GtpTunnelAdd(const char *ifname, int iteid, int oteid, const char *destIP, const char *tunIP);
 Status GtpTunnelDel(const char *ifname, int iteid);
 Status GtpTunnelList();

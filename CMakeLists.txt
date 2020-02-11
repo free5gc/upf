@@ -10,6 +10,8 @@ set(BUILD_CONFIG_DIR "${CMAKE_BINARY_DIR}/config")
 # Build paths
 set(LIBGTPNL_SRC "${CMAKE_SOURCE_DIR}/lib/libgtpnl-1.2.1")
 set(LIBGTPNL_DST "${CMAKE_BINARY_DIR}/libgtpnl")
+set(LIBGTP5GNL_SRC "${CMAKE_SOURCE_DIR}/lib/libgtp5gnl")
+set(LIBGTP5GNL_DST "${CMAKE_BINARY_DIR}/libgtp5gnl")
 set(LOGGER_SRC "${CMAKE_SOURCE_DIR}/lib/utlt/logger")
 set(LOGGER_DST "${CMAKE_BINARY_DIR}/utlt_logger")
 

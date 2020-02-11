@@ -269,7 +269,7 @@ void UpfN4HandleUpdateFar(UpdateFAR *updateFar, UpfFar **upfFar) {
 
                 // Send forward packet in buffer
                 UpfSession *session = UpfPdrFindByFarId(farId)->session;
-                Sock *sock = ((Gtpv1TunDevNode*)ListFirst(&Self()->gtpv1DevList))->sock1;
+                Sock *sock = ((Gtpv1TunDevNode*)ListFirst(&Self()->gtpv1DevList))->sock;
                 status = UpfSessionPacketSend(session, sock);
                 UTLT_Assert(status == STATUS_OK, , "forward the buffer error");
             } else {

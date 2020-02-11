@@ -80,7 +80,7 @@ Status GtpHandler(Sock *sock, void *data) {
     // TODO : Need to handle buffering and reject, including GTP and general packet
     // Not only GTP packet
     Gtpv1Header *gtpHdr = pktbuf->buf;
-    UTLT_Assert(gtpHdr->version == 1, goto FREEBUFBLK,
+    UTLT_Assert((gtpHdr->flags >> 5) == 1, goto FREEBUFBLK,
                 "Only handle the GTP version 1 in user plane");
 
     switch (gtpHdr->type) {
@@ -122,19 +122,16 @@ Status GtpHandleEchoRequest(Sock *sock, void *data) {
 
     // Build the Echo Response packet
     Gtpv1Header gtpRespHrd = {
-        .version = 1,
-        .PT = 1,
+        .flags = 0x30 + (gtpHdr->flags & 0x03),
         .type = GTPV1_ECHO_RESPONSE,
-        .seqFlag = gtpHdr->seqFlag,
-        .pn = gtpHdr->pn,
     };
 
     Bufblk *optPkt = BufblkAlloc(1, 0x40);
-    if (gtpRespHrd.seqFlag | gtpRespHrd.pn) {
-        Gtp1OptHeader *opthrd = (void *)((uint8_t *) data + GTPV1_HEADER_LEN);
-        Gtp1OptHeader gtpOptHrd = {
-            ._seqNum = gtpRespHrd.seqFlag ? htons(ntohs(opthrd->_seqNum) + 1) : 0,
-            .nPdnNum = gtpRespHrd.pn ? opthrd->nPdnNum : 0,
+    if (gtpRespHrd.flags & 0x03) {
+        Gtpv1OptHeader *opthrd = (void *)((uint8_t *) data + GTPV1_HEADER_LEN);
+        Gtpv1OptHeader gtpOptHrd = {
+            ._seqNum = (gtpRespHrd.flags & 0x02) ? htons(ntohs(opthrd->_seqNum) + 1) : 0,
+            .nPdnNum = (gtpRespHrd.flags & 0x01) ? opthrd->nPdnNum : 0,
         };
         BufblkBytes(optPkt, (void *) &gtpOptHrd, sizeof(gtpOptHrd));
     }
@@ -180,7 +177,7 @@ Status GtpHandleEndMark(Sock *sock, void *data) {
     /*
     Gtpv1Header *gtpHdr = data;
     int teid = ntohl(gtpHdr->_teid);
-    int gtpPayloadLen = GTPV1_HEADER_LEN + (gtpHdr->seqFlag ? GTPV1_OPT_HEADER_LEN : 0);
+    int gtpPayloadLen = GTPV1_HEADER_LEN + ((gtpHdr->flags & 0x02) ? GTPV1_OPT_HEADER_LEN : 0);
     
     */
 
@@ -227,7 +224,7 @@ Status UpfSessionPacketSend(UpfSession *session, Sock *sock) {
 
     uint32_t teid = pdr->upfGtpUTeid;
     Gtpv1Header gtpv1Hdr = {
-        .version = 1,
+        .flags = 0x20,
         .type = GTPV1_T_PDU,
         ._teid = htons(teid),
     };

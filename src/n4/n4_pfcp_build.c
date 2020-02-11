@@ -224,15 +224,15 @@ Status UpfN4BuildAssociationSetupResponse(
     Gtpv1TunDevNode *gtpDev4 = (Gtpv1TunDevNode *)ListFirst(&Self()->gtpv1DevList);
     Gtpv1TunDevNode *gtpDev6 = (Gtpv1TunDevNode *)ListFirst(&Self()->gtpv1v6DevList);
     upIpResourceInformation.v4 =
-        (gtpDev4 && gtpDev4->sock1) ? 1 : 0;
+        (gtpDev4 && gtpDev4->sock) ? 1 : 0;
     upIpResourceInformation.v6 =
-        (gtpDev6 && gtpDev6->sock1) ? 1 : 0;
+        (gtpDev6 && gtpDev6->sock) ? 1 : 0;
     if (upIpResourceInformation.v4) {
-       upIpResourceInformation.addr4 = gtpDev4->sock1->localAddr.s4.sin_addr;
+       upIpResourceInformation.addr4 = gtpDev4->sock->localAddr.s4.sin_addr;
     }
     if (upIpResourceInformation.v6) {
         // TODO: ipv6
-        //upIpResourceInformation.addr6 = gtpDev6->sock1->localAddr.s6.sin6_addr;
+        //upIpResourceInformation.addr6 = gtpDev6->sock->localAddr.s6.sin6_addr;
     }
 
     response->userPlaneIPResourceInformation.presence = 1;
