@@ -39,7 +39,7 @@ Status GtpLinkCreate(Gtpv1TunDevNode *node) {
     status = gtp_dev_create(-1, node->ifname, node->sock->fd);
     UTLT_Assert(status == STATUS_OK, return STATUS_ERROR,
                 "GTP device named %s Create fail", node->ifname);
-    
+
     UTLT_Trace("GTP device create success : IP[%s], port[%d], ifname[%s]",
                node->ip, GTP_V1_PORT, node->ifname);
 
@@ -59,6 +59,30 @@ Status GtpLinkFree(Gtpv1TunDevNode *node) {
     UTLT_Trace("GTP device destroy success");
 
     return status;
+}
+
+Status NetlinkSockOpen(NetlinkInfo *info, const char *ifname, const char *family_name) {
+    UTLT_Assert(info, return STATUS_ERROR, "NetlinkInfo is NULL");
+
+    info->nl = genl_socket_open();
+    UTLT_Assert(info->nl, return STATUS_ERROR, "genl_socket_open fail");
+
+    info->genl_id = genl_lookup_family(info->nl, family_name);
+    UTLT_Assert(info->genl_id >= 0, goto err, "Not found gtp5g genl family");
+
+    info->ifidx = if_nametoindex(ifname);
+    UTLT_Assert(info->ifidx, goto err, "Wrong 5G GTP interface %s", ifname);
+
+    return STATUS_OK;
+
+err:
+    mnl_socket_close(info->nl);
+    return STATUS_ERROR;
+}
+
+Status NetlinkSockClose(NetlinkInfo *info) {
+    mnl_socket_close(info->nl);
+    return STATUS_OK;
 }
 
 Status Gtpv1DevPoolInit() {
