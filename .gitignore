@@ -94,3 +94,6 @@ lib/libgtp5gnl/tools/gtp5g-tunnel
 
 # Build destination
 build
+
+# Tool,Chain
+TAGS
