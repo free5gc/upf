@@ -355,13 +355,25 @@ Status UpfN4HandleRemovePdr(UpfSession *session, uint16_t pdrId) {
 Status UpfN4HandleRemoveFar(uint32_t farId) {
     UTLT_Assert(farId, return STATUS_ERROR,
                 "farId should not be 0");
+
+    // TODO: here can be speedup like
+    //UpfPdr *pdr = GtpTunnelFindPdrByFarId(farId);
+    //if (pdr) {
+    //    gtp5g_pdr_set_far_id(pdr, 0);
+    //}
+    //Status status = GtpTunnelDelFar(farId);
+    //UTLT_Assert(status == STATUS_OK, return STATUS_ERROR,
+    //            "FAR delete error");
+
     UpfFar *far = GtpTunnelFindFarById(farId);
     UTLT_Assert(far != NULL, return STATUS_ERROR,
                 "Cannot find FAR[%u] by FarId", farId);
 
-    UpfPdr *pdr = GtpTunnelFindPdrByFarId(farId);
-    if (pdr) {
-        gtp5g_pdr_set_far_id(pdr, 0);
+    // Set FarId to 0 if the PDR has this far
+    int pdrNum = *(int*)gtp5g_far_get_related_pdr_num(far);
+    uint16_t *pdrList = gtp5g_far_get_related_pdr_list(far);
+    for (size_t idx = 0; idx < pdrNum; ++idx) {
+        gtp5g_pdr_set_far_id(pdrList[idx], 0);
     }
 
     Status status = _pushFarToKernel(far, _FAR_DEL);
