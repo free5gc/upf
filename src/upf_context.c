@@ -208,8 +208,7 @@ UpfSession *UpfSessionAdd(PfcpUeIpAddr *ueIp, uint8_t *apn,
     /* APN */
     strncpy((char*)session->pdn.apn, (char*)apn, MAX_APN_LEN + 1);
 
-    ListInit(&session->dlPdrList);
-    ListInit(&session->ulPdrList);
+    ListInit(&session->pdrIdList);
 
     session->pdn.paa.pdnType = pdnType;
     if (pdnType == PFCP_PDN_TYPE_IPV4) {
@@ -257,7 +256,6 @@ UpfSession *UpfSessionAdd(PfcpUeIpAddr *ueIp, uint8_t *apn,
 }
 
 Status UpfSessionRemove(UpfSession *session) {
-    UpfPdr *pdr;
     UTLT_Assert(self.sessionHash, return STATUS_ERROR,
                 "sessionHash error");
     UTLT_Assert(session, return STATUS_ERROR, "session error");
@@ -273,16 +271,14 @@ Status UpfSessionRemove(UpfSession *session) {
     //     UpfUeIPFree(session->ueIpv6);
     // }
 
-    pdr = ListFirst(&session->dlPdrList);
-    while (pdr) {
-        UpfPdrRemove(pdr);
-        pdr = (UpfPdr *)ListFirst(&session->dlPdrList);
-    }
-
-    pdr = ListFirst(&session->ulPdrList);
-    while (pdr) {
-        UpfPdrRemove(pdr);
-        pdr = (UpfPdr *)ListFirst(&session->dlPdrList);
+    uint16_t *pdrId = ListFirst(&session->pdrIdList);
+    while (pdrId) {
+        Status status = GtpTunnelDelPdr(gtp5g_int_name, *pdrId);
+        UTLT_Assert(status == STATUS_OK, ,
+                    "Remove PDR[%u] failed", *pdrId);
+        // TODO: remove FAR of PDR if need
+        ListRemove(&session->pdrIdList, pdrId);
+        pdrId = (uint16_t *)ListFirst(&session->pdrIdList);
     }
 
     IndexFree(&upfSessionPool, session);
