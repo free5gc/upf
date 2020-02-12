@@ -7,6 +7,7 @@
 #include <arpa/inet.h>
 #include <pthread.h>
 #include <netinet/in.h>
+#include <net/if.h>
 
 #include "utlt_debug.h"
 #include "utlt_index.h"
@@ -18,9 +19,10 @@
 #include "pfcp_message.h"
 #include "pfcp_types.h"
 #include "pfcp_xact.h"
+#include "gtp5g.h"
+#include "gtp5gnl.h"
 
-#define MAX_POOL_OF_PDR (MAX_POOL_OF_BEARER * 2)
-#define MAX_POOL_OF_FAR (MAX_POOL_OF_SESS * 2)
+
 #define MAX_POOL_OF_QER (MAX_POOL_OF_SESS * 2)
 #define MAX_POOL_OF_URR (MAX_POOL_OF_UE)
 #define MAX_POOL_OF_BAR (MAX_POOL_OF_UE)
@@ -28,8 +30,6 @@
 #define MAX_NUM_OF_SUBNET       16
 
 IndexDeclare(upfSessionPool, UpfSession, MAX_POOL_OF_SESS);
-IndexDeclare(upfPdrPool, UpfPdr, MAX_POOL_OF_PDR);
-IndexDeclare(upfFarPool, UpfFar, MAX_POOL_OF_FAR);
 IndexDeclare(upfQerPool, UpfQer, MAX_POOL_OF_QER);
 IndexDeclare(upfUrrPool, UpfUrr, MAX_POOL_OF_URR);
 IndexDeclare(upfBarPool, UpfBar, MAX_POOL_OF_BAR);
@@ -63,8 +63,6 @@ Status UpfContextInit() {
     ListInit(&self.ranS1uList);
     ListInit(&self.upfN4List);
     ListInit(&self.apnList);
-    ListInit(&self.pdrList);
-    ListInit(&self.farList);
     ListInit(&self.qerList);
     ListInit(&self.urrList);
 
@@ -78,8 +76,6 @@ Status UpfContextInit() {
 
     // Init Resource
     IndexInit(&upfSessionPool, MAX_POOL_OF_SESS);
-    IndexInit(&upfPdrPool, MAX_POOL_OF_PDR);
-    IndexInit(&upfFarPool, MAX_POOL_OF_FAR);
     IndexInit(&upfQerPool, MAX_POOL_OF_QER);
     IndexInit(&upfUrrPool, MAX_POOL_OF_URR);
     IndexInit(&upfBarPool, MAX_POOL_OF_BAR);
@@ -109,8 +105,6 @@ Status UpfContextTerminate() {
     IndexTerminate(&upfBarPool);
     IndexTerminate(&upfUrrPool);
     IndexTerminate(&upfQerPool);
-    IndexTerminate(&upfFarPool);
-    IndexTerminate(&upfPdrPool);
     IndexTerminate(&upfSessionPool);
 
     PfcpRemoveAllNodes(&self.upfN4List);
@@ -158,147 +152,6 @@ Status UpfApnRemoveAll() {
     }
 
     return STATUS_OK;
-}
-
-// TODO: check this function
-UpfPdr *UpfPdrAdd(UpfSession *session) {
-    UpfPdr *pdr = NULL;
-
-    UTLT_Assert(session, return NULL, "no session");
-
-    IndexAlloc(&upfPdrPool, pdr);
-    UTLT_Assert(pdr, return NULL, "PDR context allocation failed");
-    ListInit((ListNode *)pdr);
-
-    pdr->pdrId = 0;
-    //pdr->outerHdrRemove = 0;
-
-    pdr->pfcpNode = NULL;
-    pdr->far = NULL;
-    pdr->qer = NULL;
-    pdr->urr = NULL;
-    pdr->session = NULL;
-
-    return pdr;
-}
-
-Status UpfPdrRemove(UpfPdr *pdr) {
-    UTLT_Assert(pdr, return STATUS_ERROR, "PDR error");
-    UTLT_Assert(pdr->session, return STATUS_ERROR, "PDR no session");
-
-    if (pdr->pdrId) {
-        // Check if UL or  DL
-        if (pdr->sourceInterface == PFCP_SRC_INTF_ACCESS) {
-            ListRemove(&pdr->session->ulPdrList, pdr);
-        } else {
-            ListRemove(&pdr->session->dlPdrList, pdr);
-        }
-    }
-
-    if (pdr->far) {
-        UpfFarRemove(pdr->far);
-    }
-
-    IndexFree(&upfPdrPool, pdr);
-
-    return STATUS_OK;
-}
-
-UpfPdr *UpfPdrFindByPdrId(uint16_t pdrId) {
-    int idx;
-    for (idx = 0; idx < IndexSize(&upfPdrPool); ++idx) {
-        UpfPdr *pdr = IndexFind(&upfPdrPool, idx);
-        if (pdr->pdrId == pdrId) {
-            return pdr;
-        }
-    }
-
-    return NULL;
-}
-
-UpfPdr *UpfPdrFindByFarId(uint32_t farId) {
-    int idx;
-    for (idx = 0; idx < IndexSize(&upfPdrPool); ++idx) {
-        UpfPdr *pdr = IndexFind(&upfPdrPool, idx);
-        if (pdr->far && pdr->far->farId == farId) {
-            return pdr;
-        }
-    }
-
-    return NULL;
-}
-
-UpfPdr *UpfPdrFidByUpfGtpUTeid(uint32_t teid) {
-
-    HashIndex *hashIdx = NULL;
-
-    for (hashIdx = UpfSessionFirst(); hashIdx; hashIdx = UpfSessionNext(hashIdx)) {
-        UpfSession *session = UpfSessionThis(hashIdx);
-        UTLT_Assert(session, return NULL, "session from hash error");
-
-        UpfPdr *pdr = NULL;
-        UpfPdr *defaultPdr = NULL;
-
-        /* Save default PDR */
-        defaultPdr = ListFirst(&session->ulPdrList);
-        UTLT_Assert(defaultPdr, return NULL, "No default PDR");
-
-        /* Find */
-        pdr = defaultPdr;
-        for (; pdr; pdr = ListNext(pdr)) {
-            if (pdr->sourceInterface != PFCP_SRC_INTF_ACCESS) {
-                continue;
-            }
-
-            if (pdr->upfGtpUTeid == teid) {
-                return pdr;
-            }
-        }
-    }
-
-    return NULL;
-}
-
-UpfFar *UpfFarAdd() {
-    UpfFar *far = NULL;
-
-    IndexAlloc(&upfFarPool, far);
-    UTLT_Assert(far, return NULL, "FAR context allocation failed");
-
-    far->farId = far->index;
-
-    far->pfcpNode = NULL;
-    far->bar = NULL;
-    //far->gtpNode = NULL;
-
-    ListAppend(&self.farList, far);
-
-    return far;
-}
-
-Status UpfFarRemove(UpfFar *far) {
-    UTLT_Assert(far, return STATUS_ERROR, "far error");
-
-    ListRemove(&Self()->farList, far);
-
-    IndexFree(&upfFarPool, far);
-
-    return STATUS_OK;
-}
-
-UpfFar *UpfFarFindByFarId(uint32_t farId) {
-    UpfFar *far = NULL;
-
-    far = ListFirst(&Self()->farList);
-    while (far) {
-        if (far->farId == farId) {
-            break;
-        }
-        far = ListNext(far);
-    }
-
-    // if return NULL, no FAR has the farId
-    return far;
 }
 
 HashIndex *UpfSessionFirst() {

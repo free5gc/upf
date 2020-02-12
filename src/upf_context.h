@@ -18,6 +18,7 @@
 #include "pfcp_node.h"
 #include "gtp_path.h"
 #include "pfcp_message.h"
+#include "gtp5g.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -25,7 +26,8 @@ extern "C" {
 
 typedef struct _UpfUeIp     UpfUeIp;
 typedef struct _UpfDev      UpfDev;
-typedef struct _UpfFar      UpfFar;
+typedef struct gtp5g_pdr    UpfPdr;
+typedef struct gtp5g_far    UpfFar;
 typedef struct _UpfBar      UpfBar;
 typedef struct _UpfQer      UpfQer;
 typedef struct _UpfUrr      UpfUrr;
@@ -122,8 +124,7 @@ typedef struct _UpfSession {
     /* GTP, PFCP context */
     //SockNode        *gtpNode;
     PfcpNode        *pfcpNode;
-    ListNode        dlPdrList;
-    ListNode        ulPdrList;
+    ListNode        pdrIdList;
 
     /* Buff the un-tunnel packet */
 #define MAX_NUM_OF_PACKET_BUFFER_SIZE 0xff
@@ -131,62 +132,6 @@ typedef struct _UpfSession {
     Bufblk          *packetBuffer[MAX_NUM_OF_PACKET_BUFFER_SIZE];
     pthread_mutex_t bufLock;
 } UpfSession;
-
-typedef struct _UpfPdr {
-    ListNode        node;               // Node List
-    int             index;
-
-    uint32_t        upfGtpUTeid;
-    uint8_t         ulDl;               // UL(0) or DL(1) PDR
-    uint16_t        pdrId;
-
-#define SMF_TEID_IP_DESC_IPV4   1
-#define SMF_TEID_IP_DESC_IPV6   2
-    // Upf Ip (with upfGtpUTeid conbine to F-TEID)
-    union {
-        /* IPV4 */
-        struct in_addr      addr4;
-        /* IPV6 */
-        struct in6_addr     addr6;
-        /* BOTH */
-        struct {
-            struct in_addr  addr4;
-            struct in6_addr addr6;
-        } dualStack;
-    };
-
-    UpfUeIp         ueIp;
-
-    uint32_t        precedence;
-    uint8_t         outerHeaderRemove;
-    uint8_t         sourceInterface;
-
-    UpfFar          *far;
-    UpfQer          *qer;
-    UpfUrr          *urr;
-
-    PfcpNode        *pfcpNode;
-    UpfSession      *session;
-} UpfPdr;
-
-typedef struct _UpfFar {
-    ListNode        node;
-    int             index;
-
-    uint32_t        farId;
-    uint8_t         applyAction;
-    uint8_t         destinationInterface;
-
-    uint16_t        referenceCount; // for reported usage
-    uint8_t         created;
-
-    uint32_t        upfN3Teid;
-    Ip              ranIp;
-
-    UpfBar          *bar;
-    PfcpNode        *pfcpNode;
-    //SockNode        *gtpNode; // TODO: check if can used
-} UpfFar;
 
 typedef struct _UpfUrr {
     ListNode        node;
@@ -233,14 +178,6 @@ Status UpfContextTerminate();
 // APN / PDR / FAR
 ApnNode *UpfApnAdd(const char *apnName, const char *ip, const char *prefix, const char *natifname);
 Status UpfApnRemoveAll();
-UpfPdr *UpfPdrAdd(UpfSession *session);
-Status UpfPdrRemove(UpfPdr *pdr);
-UpfPdr *UpfPdrFindByPdrId(uint16_t pdrId);
-UpfPdr *UpfPdrFindByFarId(uint32_t farId);
-UpfPdr *UpfPdrFidByUpfGtpUTeid(uint32_t teid);
-UpfFar *UpfFarAdd();
-Status UpfFarRemove(UpfFar *far);
-UpfFar *UpfFarFindByFarId(uint32_t farId);
 
 // Session
 HashIndex *UpfSessionFirst();

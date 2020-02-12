@@ -228,52 +228,49 @@ Status UpfN4HandleUpdatePdr(UpdatePDR *updatePdr) {
 
     // Find PDR
     uint16_t pdrId = ntohs(*((uint16_t*)updatePdr->pDRID.value));
-    tmpPdr = UpfPdrFindByPdrId(pdrId);
+    tmpPdr = GtpTunnelFindPdrById(gtp5g_int_name, tmpPdr);
+    UTLT_Assert(tmpPdr, return STATUS_ERROR,
+                "[PFCP] UpdatePDR PDR not found");
 
-    if (tmpPdr) {
-        // TODO: other IE of update PDR
-        if (updatePdr->precedence.presence) {
-            gtp5g_pdr_set_id(tmpPdr, *(uint32_t)updatePdr->pDRID.value);
-        }
-        if (updatePdr->outerHeaderRemoval.presence) {
-            gtp5g_pdr_set_outer_header_removal(tmpPdr,
-              *((uint8_t*)(updatePdr->outerHeaderRemoval.value)));
-        }
-        if (updatePdr->precedence.presence) {
-            gtp5g_pdr_set_procedence(tmpPdr,
-              *((uint32_t *)(updatePdr->precedence.value)));
-        }
-        if (updatePdr->pDI.presence) {
-            if (updatePdr->pDI.localFTEID.presence) {
-                PfcpFTeid *fTeid = (PfcpFTeid*)updatePdr->pDI.localFTEID.value;
-                uint32_t teid = ntohl(fTeid->teid);
+    // TODO: other IE of update PDR
+    if (updatePdr->precedence.presence) {
+        gtp5g_pdr_set_id(tmpPdr, *(uint32_t)updatePdr->pDRID.value);
+    }
+    if (updatePdr->outerHeaderRemoval.presence) {
+        gtp5g_pdr_set_outer_header_removal(tmpPdr,
+          *((uint8_t*)(updatePdr->outerHeaderRemoval.value)));
+    }
+    if (updatePdr->precedence.presence) {
+        gtp5g_pdr_set_procedence(tmpPdr,
+          *((uint32_t *)(updatePdr->precedence.value)));
+    }
+    if (updatePdr->pDI.presence) {
+        if (updatePdr->pDI.localFTEID.presence) {
+            PfcpFTeid *fTeid = (PfcpFTeid*)updatePdr->pDI.localFTEID.value;
+            uint32_t teid = ntohl(fTeid->teid);
 
-                if (fTeid->v4 && fTeid->v6) {
-                    // TODO: Dual Stack
-                } else if (fTeid->v4) {
-                    gtp5g_pdr_set_local_f_teid(tmpPdr, teid, &(fTeid->addr4));
-                } else if (fTeid->v6) {
-                    // TODO: ipv6
-                    //gtp5g_pdr_set_local_f_teid(tmpPdr, teid, &(fTeid->addr6));
-                }
-            }
-            if (updatePdr->pDI.uEIPAddress.presence) {
-                PfcpUeIpAddr *ueIp = (PfcpUeIpAddr*)updatePdr->pDI.uEIPAddress.value;
-                if (ueIp->v4 && ueIp->v6) {
-                    // TODO: Dual Stack
-                } else if (ueIp->v4) {
-                    gtp5g_pdr_set_ue_addr_ipv4(tmpPdr, &(ueIp->addr4));
-                } else if (ueIp->v6) {
-                    // TODO: IPv6
-                }
+            if (fTeid->v4 && fTeid->v6) {
+                // TODO: Dual Stack
+            } else if (fTeid->v4) {
+                gtp5g_pdr_set_local_f_teid(tmpPdr, teid, &(fTeid->addr4));
+            } else if (fTeid->v6) {
+                // TODO: ipv6
+                //gtp5g_pdr_set_local_f_teid(tmpPdr, teid, &(fTeid->addr6));
             }
         }
-        if (updatePdr->fARID.presence) {
-            gtp5g_pdr_set_far_id(tmpPdr, *(uint32_t *)updatePdr->fARID.value);
+        if (updatePdr->pDI.uEIPAddress.presence) {
+            PfcpUeIpAddr *ueIp = (PfcpUeIpAddr*)updatePdr->pDI.uEIPAddress.value;
+            if (ueIp->v4 && ueIp->v6) {
+                // TODO: Dual Stack
+            } else if (ueIp->v4) {
+                gtp5g_pdr_set_ue_addr_ipv4(tmpPdr, &(ueIp->addr4));
+            } else if (ueIp->v6) {
+                // TODO: IPv6
+            }
         }
-    } else {
-        /* PDR missing in updatePDR */
-        UTLT_Assert(0, , "[PFCP] Session Modification Request miss of PDR context");
+    }
+    if (updatePdr->fARID.presence) {
+      gtp5g_pdr_set_far_id(tmpPdr, *(uint32_t *)updatePdr->fARID.value);
     }
 
     // update PDR to kernel
@@ -291,35 +288,31 @@ Status UpfN4HandleUpdateFar(UpdateFAR *updateFar) {
 
     // Find FAR
     uint32_t farId = ntohl(*((uint32_t *)updateFar->fARID.value));
-    tmpFar = UpfFarFindByFarId(farId);
+    tmpFar = GtpTunnelFindFarById(farId);
+    UTLT_Assert(tmpFar, return STATUS_ERROR,
+                "[PFCP] UpdateFAR FAR not found");
 
-    if (tmpFar) {
-        // update ApplyAction
-        if (updateFar->applyAction.presence) {
-            gtp5g_far_set_apply_action(tmpFar,
-              *(uint8_t *)updateFar->applyAction.value);
-        }
-        // update Forwarding parameters
-        if (updateFar->updateForwardingParameters.outerHeaderCreation.value) {
-            PfcpOuterHdr *outerHdr = (PfcpOuterHdr *)
-              (updateFar->updateForwardingParameters.outerHeaderCreation.value);
-            uint16_t description = *((uint16_t *)outerHdr);
-
-            if (outerHdr->gtpuIpv4) {
-                gtp5g_far_set_outer_header_creation(tmpFar, description,
-                  ntohl(outerHdr->teid), &(outerHdr->addr4), 2152);
-            } else if (outerHdr->udpIpv4) {
-                gtp5g_far_set_outer_header_creation(tmpFar, description,
-                  0, &(outerHdr->addr4), ntohl(outerHdr->port));
-            }
-        }
-        // TODO: update Duplicating parameters
-        // TODO: update BAR
-    } else {
-        /* FAR not found */
-        UTLT_Assert(0, return STATUS_ERROR,
-                    "[PFCP] updateFar FAR not found");
+    // update ApplyAction
+    if (updateFar->applyAction.presence) {
+        gtp5g_far_set_apply_action(tmpFar,
+          *(uint8_t *)updateFar->applyAction.value);
     }
+    // update Forwarding parameters
+    if (updateFar->updateForwardingParameters.outerHeaderCreation.value) {
+        PfcpOuterHdr *outerHdr = (PfcpOuterHdr *)
+          (updateFar->updateForwardingParameters.outerHeaderCreation.value);
+        uint16_t description = *((uint16_t *)outerHdr);
+
+        if (outerHdr->gtpuIpv4) {
+            gtp5g_far_set_outer_header_creation(tmpFar, description,
+              ntohl(outerHdr->teid), &(outerHdr->addr4), 2152);
+        } else if (outerHdr->udpIpv4) {
+            gtp5g_far_set_outer_header_creation(tmpFar, description,
+              0, &(outerHdr->addr4), ntohl(outerHdr->port));
+        }
+    }
+    // TODO: update Duplicating parameters
+    // TODO: update BAR
 
     // TODO: update FAR to kernel
     _pushFarToKernel(tmpFar, _FAR_MOD);
@@ -331,7 +324,7 @@ Status UpfN4HandleUpdateFar(UpdateFAR *updateFar) {
 }
 
 Status UpfN4HandleRemovePdr(uint16_t pdrId) {
-    UpfPdr *pdr = UpfPdrFindByPdrId(pdrId);
+    UpfPdr *pdr = GtpTunnelFindPdrById(pdrId);
     UTLT_Assert(pdr != NULL, return STATUS_ERROR,
                 "Cannot find PDR by PdrId");
 
@@ -355,14 +348,13 @@ Status UpfN4HandleRemovePdr(uint16_t pdrId) {
 }
 
 Status UpfN4HandleRemoveFar(uint32_t farId) {
-    // TODO: This function is Marked
-    UpfFar *far = UpfFarFindByFarId(farId);
+    UpfFar *far = GtpTunnelFindFarById(farId);
     UTLT_Assert(far != NULL, return STATUS_ERROR,
                 "Cannot find FAR by FarId");
 
-    UpfPdr *pdr = UpfPdrFindByFarId(farId);
+    UpfPdr *pdr = GtpTunnelFindPdrByFarId(farId);
     if (pdr) {
-        gtp5g_pdr4_set_far_id(pdr, 0);
+        gtp5g_pdr_set_far_id(pdr, 0);
     }
 
     _pushFarToKernel(far, _FAR_DEL);
@@ -372,23 +364,37 @@ Status UpfN4HandleRemoveFar(uint32_t farId) {
     return STATUS_OK;
 }
 
-void UpfN4HandleSessionEstablishmentRequest(
-        UpfSession *session, PfcpXact *pfcpXact, PFCPSessionEstablishmentRequest *request) {
-    UpfPdr *pdr0;
-    UpfPdr *pdr1;
-    UpfFar *far0;
-    UpfFar *far1;
+Status UpfN4HandleSessionEstablishmentRequest(
+        UpfSession *session, PfcpXact *pfcpXact,
+        PFCPSessionEstablishmentRequest *request) {
+    Status status;
 
-    UTLT_Assert(session, return, "Upf Session error");
-    UTLT_Assert(pfcpXact, return, "pfcpXact error");
-    //UTLT_Assert(pfcpXact->gtpBuf, return, "GTP buffer of pfcpXact error");
-    //UTLT_Assert(pfcpXact->gtpXact, return, "GTP Xact of pfcpXact error");
+    UTLT_Assert(session, return STATUS_ERROR, "Upf Session error");
+    UTLT_Assert(pfcpXact, return STATUS_ERROR, "pfcpXact error");
+    //UTLT_Assert(pfcpXact->gtpBuf, return,
+    //  "GTP buffer of pfcpXact error");
+    //UTLT_Assert(pfcpXact->gtpXact, return,
+    // "GTP Xact of pfcpXact error");
 
-    if (request->createFAR[0].presence) {
-        UpfN4HandleCreateFar(&request->createFAR[0], &far0);
+    if (request->createPDR[0].presence) {
+        status = UpfN4HandleCreatePdr(&request->createPDR[0]);
+        UTLT_Assert(status == STATUS_OK, return STATUS_ERROR,
+                    "Create PDR Error");
     }
-    if (request->createFAR[1].presence) {
-        UpfN4HandleCreateFar(&request->createFAR[1], &far1);
+    if (request->createPDR[1].presence) {
+        status = UpfN4HandleCreatePdr(&request->createPDR[1]);
+        UTLT_Assert(status == STATUS_OK, return STATUS_ERROR,
+                    "Create PDR 2 Error");
+    }
+    if (request->createFAR[0].presence) {
+        status = UpfN4HandleCreateFar(session, &request->createFAR[0]);
+        UTLT_Assert(status == STATUS_OK, return STATUS_ERROR,
+                    "Create FAR error");
+    }
+    if (request->createPDR[1].presence) {
+        status = UpfN4HandleCreateFar(session, &request->createFAR[1]);
+        UTLT_Assert(status == STATUS_OK, return STATUS_ERROR,
+                    "Create FAR error");
     }
     if (request->createURR.presence) {
         // TODO
@@ -399,14 +405,7 @@ void UpfN4HandleSessionEstablishmentRequest(
     if (request->createQER.presence) {
         // TODO
     }
-    if (request->createPDR[0].presence) {
-        UpfN4HandleCreatePdr(session, &request->createPDR[0], &pdr0);
-    }
-    if (request->createPDR[1].presence) {
-        UpfN4HandleCreatePdr(session, &request->createPDR[1], &pdr1);
-    }
 
-    Status status;
     PfcpHeader header;
     Bufblk *bufBlk = NULL;
     PfcpFSeid *smfFSeid = NULL;
@@ -426,66 +425,83 @@ void UpfN4HandleSessionEstablishmentRequest(
 
     status = UpfN4BuildSessionEstablishmentResponse(
         &bufBlk, header.type, session, request);
-    UTLT_Assert(status == STATUS_OK, return, "N4 build error");
+    UTLT_Assert(status == STATUS_OK, return STATUS_ERROR,
+                "N4 build error");
 
     status = PfcpXactUpdateTx(pfcpXact, &header, bufBlk);
-    UTLT_Assert(status == STATUS_OK, return, "pfcpXact update TX error");
+    UTLT_Assert(status == STATUS_OK, return STATUS_ERROR,
+                "pfcpXact update TX error");
 
     status = PfcpXactCommit(pfcpXact);
-    UTLT_Assert(status == STATUS_OK, return, "xact commit error");
+    UTLT_Assert(status == STATUS_OK, return STATUS_ERROR,
+                "xact commit error");
 
     UTLT_Info("[PFCP] Session Establishment Response");
-    return;
+    return STATUS_OK;
 }
 
-void UpfN4HandleSessionModificationRequest(
-        UpfSession *session, PfcpXact *xact, PFCPSessionModificationRequest *request) {
-    UTLT_Assert(session, return, "Session error");
-    UTLT_Assert(xact, return, "xact error");
+Status UpfN4HandleSessionModificationRequest(
+        UpfSession *session, PfcpXact *xact,
+        PFCPSessionModificationRequest *request) {
+    UTLT_Assert(session, return STATUS_ERROR, "Session error");
+    UTLT_Assert(xact, return STATUS_ERROR, "xact error");
 
     Status status;
     PfcpHeader header;
     Bufblk *bufBlk;
 
-    /* Create FAR */
-    if (request->createFAR[0].presence) {
-        UpfFar *far0;
-        UpfN4HandleCreateFar(&request->createFAR[0], &far0);
-    }
-    if (request->createFAR[1].presence) {
-        UpfFar *far1;
-        UpfN4HandleCreateFar(&request->createFAR[1], &far1);
-    }
+    /* Create PDR */
     if (request->createPDR[0].presence) {
-        UpfPdr *pdr0;
-        UpfN4HandleCreatePdr(session, &request->createPDR[0], &pdr0);
+        status = UpfN4HandleCreatePdr(session, &request->createPDR[0]);
+        UTLT_Assert(status == STATUS_OK, return STATUS_ERROR,
+                    "Modification: Create PDR error");
     }
     if (request->createPDR[1].presence) {
-        UpfPdr *pdr1;
-        UpfN4HandleCreatePdr(session, &request->createPDR[1], &pdr1);
+        status = UpfN4HandleCreatePdr(session, &request->createPDR[1]);
+        UTLT_Assert(status == STATUS_OK, return STATUS_ERROR,
+                    "Modification: Create PDR2 error");
+    }
+    /* Create FAR */
+    if (request->createFAR[0].presence) {
+        status = UpfN4HandleCreateFar(&request->createFAR[0]);
+        UTLT_Assert(status == STATUS_OK, return STATUS_ERROR,
+                    "Modification: Create FAR error");
+    }
+    if (request->createFAR[1].presence) {
+        status = UpfN4HandleCreateFar(&request->createFAR[1]);
+        UTLT_Assert(status == STATUS_OK, return STATUS_ERROR,
+                    "Modification: Create FAR2 error");
     }
 
-    /* Update FAR */
-    if (request->updateFAR.presence) {
-        UpfFar *far;
-        UpfN4HandleUpdateFar(&request->updateFAR, &far);
-    }
     /* Update PDR */
     if (request->updatePDR.presence) {
-        UpfPdr *pdr;
-        UpfN4HandleUpdatePdr(&request->updatePDR, &pdr);
+        status = UpfN4HandleUpdatePdr(&request->updatePDR);
+        UTLT_Assert(status == STATUS_OK, return STATUS_ERROR,
+                    "Modification: Update PDR error");
+    }
+    /* Update FAR */
+    if (request->updateFAR.presence) {
+        status = UpfN4HandleUpdateFar(&request->updateFAR);
+        UTLT_Assert(status == STATUS_OK, return STATUS_ERROR,
+                    "Modification: Update FAR error");
     }
     /* Remove PDR */
     if (request->removePDR.presence) {
-        UTLT_Assert(request->removePDR.pDRID.presence == 1,
-		    , "[PFCP] PdrId in removePDR not presence!");
-        UpfN4HandleRemovePdr(*(uint16_t*)request->removePDR.pDRID.value);
+        UTLT_Assert(request->removePDR.pDRID.presence == 1, ,
+                    "[PFCP] PdrId in removePDR not presence!");
+        status = UpfN4HandleRemovePdr(
+                   *(uint16_t*)request->removePDR.pDRID.value);
+        UTLT_Assert(status == STATUS_OK, return STATUS_ERROR,
+                    "Modification: Remove PDR error");
     }
     /* Remove FAR */
     if (request->removeFAR.presence) {
-      UTLT_Assert(request->removeFAR.fARID.presence == 1,
-		  ,"[PFCP] FarId in removeFAR not presence");
-        UpfN4HandleRemoveFar(*(uint32_t*)request->removeFAR.fARID.value);
+        UTLT_Assert(request->removeFAR.fARID.presence == 1, ,
+                    "[PFCP] FarId in removeFAR not presence");
+        status = UpfN4HandleRemoveFar(
+                   *(uint32_t*)request->removeFAR.fARID.value);
+        UTLT_Assert(status == STATUS_OK, return STATUS_ERROR,
+                    "Modification: Remove FAR error");
     }
     //TODO
 
@@ -508,24 +524,23 @@ void UpfN4HandleSessionModificationRequest(
     return;
 }
 
-void UpfN4HandleSessionDeletionRequest(UpfSession *session, PfcpXact *xact, PFCPSessionDeletionRequest *request) {
-    UTLT_Assert(session, return, "session error");
-    UTLT_Assert(xact, return, "xact error");
+Status UpfN4HandleSessionDeletionRequest(UpfSession *session,
+       PfcpXact *xact, PFCPSessionDeletionRequest *request) {
+    UTLT_Assert(session, return STATUS_ERROR, "session error");
+    UTLT_Assert(xact, return STATUS_ERROR, "xact error");
 
     Status status;
     PfcpHeader header;
     Bufblk *bufBlk = NULL;
 
-    // Remove all Gtp Tunnel of this session
-    Gtpv1TunDevNode *gtpList = (Gtpv1TunDevNode*)ListFirst(&Self()->gtpv1DevList);
-    char *ifname = gtpList->ifname;
-    UpfPdr *tmpPdr;
-    for (tmpPdr = (UpfPdr*)ListFirst(&session->dlPdrList); tmpPdr; tmpPdr = (UpfPdr*)ListNext(tmpPdr)) {
-        status = GtpTunnelDel(ifname, tmpPdr->upfGtpUTeid);
-        UTLT_Assert(status == STATUS_OK, , "Gtp Tunnel delete failed");
-    }
     // TODO: Remove all PDR
     // TODO: Remove all FAR
+    for (uint16_t *pdrId = ListFirst(&session->pdrIdList);
+         pdrId != NULL; pdrId = ListNext(pdrId)) {
+        status = GtpTunnelDelPdr(, pdrId);
+        UTLT_Assert(status == STATUS_OK, return STATUS_ERROR,
+                    "Remove PDR error");
+    }
 
     /* delete session */
     UpfSessionRemove(session);
@@ -536,40 +551,51 @@ void UpfN4HandleSessionDeletionRequest(UpfSession *session, PfcpXact *xact, PFCP
     header.type = PFCP_SESSION_DELETION_RESPONSE;
     header.seid = session->smfSeid;
 
-    status = UpfN4BuildSessionDeletionResponse(&bufBlk, header.type, session, request);
-    UTLT_Assert(status == STATUS_OK, return, "N4 build error");
+    status = UpfN4BuildSessionDeletionResponse(&bufBlk,
+               header.type, session, request);
+    UTLT_Assert(status == STATUS_OK, return STATUS_ERROR,
+                "N4 build error");
 
     status = PfcpXactUpdateTx(xact, &header, bufBlk);
-    UTLT_Assert(status == STATUS_OK, return, "PfcpXactUpdateTx error");
+    UTLT_Assert(status == STATUS_OK, return STATUS_ERROR,
+                "PfcpXactUpdateTx error");
 
     status = PfcpXactCommit(xact);
-    UTLT_Assert(status == STATUS_OK, return, "xact commit error");
+    UTLT_Assert(status == STATUS_OK, return STATUS_ERROR,
+                "xact commit error");
 
     UTLT_Info("[PFCP] Session Deletion Response");
-    return;
+    return STATUS_OK;
 }
 
-void UpfN4HandleSessionReportResponse(
-        UpfSession *session, PfcpXact *xact, PFCPSessionReportResponse *response) {
+Status UpfN4HandleSessionReportResponse(
+         UpfSession *session, PfcpXact *xact,
+         PFCPSessionReportResponse *response) {
     Status status;
 
-    UTLT_Assert(session, return, "Session error");
-    UTLT_Assert(xact, return, "xact error");
-    UTLT_Assert(response->cause.presence, return, "SessionReportResponse error: no Cause");
+    UTLT_Assert(session, return STATUS_ERROR, "Session error");
+    UTLT_Assert(xact, return STATUS_ERROR, "xact error");
+    UTLT_Assert(response->cause.presence, return STATUS_ERROR,
+                "SessionReportResponse error: no Cause");
+
+    // TODO: check if need update TX
 
     status = PfcpXactCommit(xact);
-    UTLT_Assert(status == STATUS_OK, return, "xact commit error");
+    UTLT_Assert(status == STATUS_OK, return STATUS_ERROR, "xact commit error");
 
     UTLT_Info("[PFCP] Session Report Response");
-    return;
+    return STATUS_OK;
 }
 
-void UpfN4HandleAssociationSetupRequest(PfcpXact *xact, PFCPAssociationSetupRequest *request) {
+Status UpfN4HandleAssociationSetupRequest(PfcpXact *xact,
+       PFCPAssociationSetupRequest *request) {
     PfcpNodeId *nodeId;
 
-    UTLT_Assert(xact, return, "xact error");
-    UTLT_Assert(xact->gnode, return, "gNode of xact error");
-    UTLT_Assert(request->nodeID.presence, return, "Request missing nodeId");
+    UTLT_Assert(xact, return STATUS_ERROR, "xact error");
+    UTLT_Assert(xact->gnode, return STATUS_ERROR,
+                "gNode of xact error");
+    UTLT_Assert(request->nodeID.presence, return STATUS_ERROR,
+                "Request missing nodeId");
 
     nodeId = (PfcpNodeId *)request->nodeID.value;
 
@@ -599,29 +625,34 @@ void UpfN4HandleAssociationSetupRequest(PfcpXact *xact, PFCPAssociationSetupRequ
     header.seid = 0;
 
     status = UpfN4BuildAssociationSetupResponse(&bufBlk, header.type);
-    UTLT_Assert(status == STATUS_OK, return, "N4 build error");
+    UTLT_Assert(status == STATUS_OK, return STATUS_ERROR,
+                "N4 build error");
 
     status = PfcpXactUpdateTx(xact, &header, bufBlk);
-    UTLT_Assert(status == STATUS_OK, return, "PfcpXactUpdateTx error");
+    UTLT_Assert(status == STATUS_OK, return STATUS_ERROR,
+                "PfcpXactUpdateTx error");
 
     status = PfcpXactCommit(xact);
-    UTLT_Assert(status == STATUS_OK, return, "xact commit error");
+    UTLT_Assert(status == STATUS_OK, return STATUS_ERROR,
+                "xact commit error");
 
     UTLT_Info("[PFCP] Association Session Setup Response");
-    return;
+    return STATUS_OK;
 }
 
-void UpfN4HandleAssociationUpdateRequest(PfcpXact *xact, PFCPAssociationUpdateRequest *request) {
+Status UpfN4HandleAssociationUpdateRequest(PfcpXact *xact, PFCPAssociationUpdateRequest *request) {
     // TODO
     UTLT_Info("[PFCP] TODO Association Update Request");
+    return STATUS_OK;
 }
 
-void UpfN4HandleAssociationReleaseRequest(PfcpXact *xact, PFCPAssociationReleaseRequest *request) {
+Status UpfN4HandleAssociationReleaseRequest(PfcpXact *xact, PFCPAssociationReleaseRequest *request) {
     // TODO
     UTLT_Info("[PFCP] TODO Association Release Request");
+    return STATUS_OK;
 }
 
-void UpfN4HandleHeartbeatRequest(PfcpXact *xact, HeartbeatRequest *request) {
+Status UpfN4HandleHeartbeatRequest(PfcpXact *xact, HeartbeatRequest *request) {
     Status status;
     PfcpHeader header;
     Bufblk *bufBlk = NULL;
@@ -634,20 +665,23 @@ void UpfN4HandleHeartbeatRequest(PfcpXact *xact, HeartbeatRequest *request) {
     header.seid = 0;
 
     status = UpfN4BuildHeartbeatResponse(&bufBlk, header.type);
-    UTLT_Assert(status == STATUS_OK, return, "N4 build error");
+    UTLT_Assert(status == STATUS_OK, return STATUS_ERROR,
+                "N4 build error");
 
     status = PfcpXactUpdateTx(xact, &header, bufBlk);
-    UTLT_Assert(status == STATUS_OK, return, "PfcpXactUpdateTx error");
+    UTLT_Assert(status == STATUS_OK, return STATUS_ERROR,
+                "PfcpXactUpdateTx error");
 
     status = PfcpXactCommit(xact);
-    UTLT_Assert(status == STATUS_OK, return, "xact commit error");
+    UTLT_Assert(status == STATUS_OK, return STATUS_ERROR,
+                "xact commit error");
 
     UTLT_Info("[PFCP] Heartbeat Response");
-    return;
+    return STATUS_OK;
 }
 
-void UpfN4HandleHeartbeatResponse(PfcpXact *xact, HeartbeatResponse *response) {
+Status UpfN4HandleHeartbeatResponse(PfcpXact *xact, HeartbeatResponse *response) {
     // if rsv response, nothing to do, else peer may be not alive
     UTLT_Info("[PFCP] Heartbeat Response");
-    return;
+    return STATUS_OK;
 }
