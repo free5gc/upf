@@ -126,8 +126,10 @@ Status UpfContextTerminate() {
 /**
  * @param  *natifname: nullable
  */
-ApnNode *UpfApnAdd(const char *apnName, const char *ip, const char *prefix, const char *natifname) {
-    UTLT_Assert(strlen(apnName) <= MAX_APN_LEN, return NULL, "apn name should not longer than %d", MAX_APN_LEN);
+ApnNode *UpfApnAdd(const char *apnName, const char *ip,
+                   const char *prefix, const char *natifname) {
+    UTLT_Assert(strlen(apnName) <= MAX_APN_LEN, return NULL,
+                "apn name should not longer than %d", MAX_APN_LEN);
 
     ApnNode *newApnNode = UTLT_Malloc(sizeof(ApnNode));
     strcpy(newApnNode->apn, apnName);
@@ -169,7 +171,8 @@ UpfSession *UpfSessionThis(HashIndex *hashIdx) {
     return (UpfSession *)HashThisKey(hashIdx);
 }
 
-void SessionHashKeygen(uint8_t *out, int *outLen, uint8_t *imsi, int imsiLen, uint8_t *apn) {
+void SessionHashKeygen(uint8_t *out, int *outLen, uint8_t *imsi,
+                       int imsiLen, uint8_t *apn) {
     memcpy(out, imsi, imsiLen);
     strncpy((char *)(out + imsiLen), (char*)apn, MAX_APN_LEN + 1);
     *outLen = imsiLen + strlen((char *)(out + imsiLen));
@@ -177,7 +180,8 @@ void SessionHashKeygen(uint8_t *out, int *outLen, uint8_t *imsi, int imsiLen, ui
     return;
 }
 
-UpfSession *UpfSessionAdd(PfcpUeIpAddr *ueIp, uint8_t *apn, uint8_t pdnType) {
+UpfSession *UpfSessionAdd(PfcpUeIpAddr *ueIp, uint8_t *apn,
+                          uint8_t pdnType) {
     UpfSession *session = NULL;
 
     IndexAlloc(&upfSessionPool, session);
@@ -186,10 +190,15 @@ UpfSession *UpfSessionAdd(PfcpUeIpAddr *ueIp, uint8_t *apn, uint8_t pdnType) {
     //session->gtpNode = NULL;
 
     if (self.pfcpAddr) {
-        session->upfSeid = ((uint64_t)self.pfcpAddr->s4.sin_addr.s_addr << 32) | session->index;
+        session->upfSeid =
+          ((uint64_t)self.pfcpAddr->s4.sin_addr.s_addr << 32)
+          | session->index;
     } else if (self.pfcpAddr6) {
-        uint32_t *ptr = (uint32_t *)self.pfcpAddr6->s6.sin6_addr.s6_addr;
-        session->upfSeid = (((uint64_t)(*ptr)) << 32) | session->index; // TODO: check if correct
+        uint32_t *ptr =
+          (uint32_t *)self.pfcpAddr6->s6.sin6_addr.s6_addr;
+        session->upfSeid =
+          (((uint64_t)(*ptr)) << 32) | session->index;
+        // TODO: check if correct
     }
     session->upfSeid = htobe64(session->upfSeid);
     //UTLT_Info()
@@ -210,10 +219,14 @@ UpfSession *UpfSessionAdd(PfcpUeIpAddr *ueIp, uint8_t *apn, uint8_t pdnType) {
     } else if (pdnType == PFCP_PDN_TYPE_IPV4V6) {
         // TODO
         // session->ueIpv4 = UpfUeIPAlloc(AF_INET, apn);
-        // UTLT_Assert(session->ueIpv4, UpfSessionRemove(session); return NULL, "Cannot allocate IPv4");
+        // UTLT_Assert(session->ueIpv4,
+        //   UpfSessionRemove(session); return NULL,
+        //   "Cannot allocate IPv4");
 
         // session->ueIpv6 = UpfUeIPAlloc(AF_INET6, apn);
-        // UTLT_Assert(session->ueIpv6, UpfSessionRemove(session); return NULL, "Cannot allocate IPv6");
+        // UTLT_Assert(session->ueIpv6,
+        //   UpfSessionRemove(session); return NULL,
+        //   "Cannot allocate IPv6");
 
         // session->pdn.paa.dualStack.addr4 = session->ueIpv4->addr4;
         // session->pdn.paa.dualStack.addr6 = session->ueIpv6->addr6;
@@ -223,12 +236,18 @@ UpfSession *UpfSessionAdd(PfcpUeIpAddr *ueIp, uint8_t *apn, uint8_t pdnType) {
 
     /* Generate Hash Key: IP + APN */
     if (pdnType == PFCP_PDN_TYPE_IPV4) {
-        SessionHashKeygen(session->hashKey, &session->hashKeylen, (uint8_t *)&session->ueIpv4.addr4, 4, apn);
+        SessionHashKeygen(session->hashKey,
+                          &session->hashKeylen,
+                          (uint8_t *)&session->ueIpv4.addr4, 4, apn);
     } else {
-        SessionHashKeygen(session->hashKey, &session->hashKeylen, (uint8_t *)&session->ueIpv6.addr6, IPV6_LEN, apn);
+        SessionHashKeygen(session->hashKey,
+                          &session->hashKeylen,
+                          (uint8_t *)&session->ueIpv6.addr6,
+                          IPV6_LEN, apn);
     }
 
-    HashSet(self.sessionHash, session->hashKey, session->hashKeylen, session);
+    HashSet(self.sessionHash, session->hashKey,
+            session->hashKeylen, session);
 
     /* initial the session's packIdx to 0 */
     session->pktBufIdx = 0;
@@ -239,11 +258,13 @@ UpfSession *UpfSessionAdd(PfcpUeIpAddr *ueIp, uint8_t *apn, uint8_t pdnType) {
 
 Status UpfSessionRemove(UpfSession *session) {
     UpfPdr *pdr;
-    UTLT_Assert(self.sessionHash, return STATUS_ERROR, "sessionHash error");
+    UTLT_Assert(self.sessionHash, return STATUS_ERROR,
+                "sessionHash error");
     UTLT_Assert(session, return STATUS_ERROR, "session error");
 
     pthread_mutex_destroy(&session->bufLock);
-    HashSet(self.sessionHash, session->hashKey, session->hashKeylen, NULL);
+    HashSet(self.sessionHash, session->hashKey,
+            session->hashKeylen, NULL);
 
     // if (session->ueIpv4) {
     //     UpfUeIPFree(session->ueIpv4);
@@ -273,7 +294,8 @@ Status UpfSessionRemoveAll() {
     HashIndex *hashIdx = NULL;
     UpfSession *session = NULL;
 
-    for (hashIdx = UpfSessionFirst(); hashIdx; hashIdx = UpfSessionNext(hashIdx)) {
+    for (hashIdx = UpfSessionFirst(); hashIdx;
+         hashIdx = UpfSessionNext(hashIdx)) {
         session = UpfSessionThis(hashIdx);
         UpfSessionRemove(session);
     }
@@ -293,7 +315,8 @@ UpfSession *UpfSessionFindBySeid(uint64_t seid) {
 UpfSession *UpfSessionAddByMessage(PfcpMessage *message) {
     UpfSession *session;
 
-    PFCPSessionEstablishmentRequest *request = &message->pFCPSessionEstablishmentRequest;
+    PFCPSessionEstablishmentRequest *request =
+      &message->pFCPSessionEstablishmentRequest;
 
     if (!request->nodeID.presence) {
         UTLT_Error("no NodeID");
@@ -328,9 +351,10 @@ UpfSession *UpfSessionAddByMessage(PfcpMessage *message) {
         return NULL;
     }
 
-    session = UpfSessionAdd((PfcpUeIpAddr *)&request->createPDR[0].pDI.uEIPAddress.value,
-            request->createPDR[0].pDI.networkInstance.value,
-            ((int8_t *)request->pDNType.value)[0]);
+    session = UpfSessionAdd((PfcpUeIpAddr *)
+                &request->createPDR[0].pDI.uEIPAddress.value,
+                request->createPDR[0].pDI.networkInstance.value,
+                ((int8_t *)request->pDNType.value)[0]);
     UTLT_Assert(session, return NULL, "session add error");
 
     session->smfSeid = *(uint64_t*)request->cPFSEID.value;
@@ -340,12 +364,3 @@ UpfSession *UpfSessionAddByMessage(PfcpMessage *message) {
     return session;
 }
 
-UpfSession *UpfSessionFindByPdrTeid(uint32_t teid) {
-    UpfPdr *pdr = NULL;
-    for (pdr = ListFirst(&Self()->pdrList); pdr; pdr = ListNext(pdr)) {
-        if (pdr->upfGtpUTeid == teid) {
-            return pdr->session;
-        }
-    }
-    return NULL;
-}

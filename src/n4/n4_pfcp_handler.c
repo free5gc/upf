@@ -27,77 +27,47 @@
 
 
 Status _pushPdrToKernel(struct gtp5g_pdr *pdr, int action) {
-    // Create netlink socket
-    struct mnl_socket *nl = genl_socket_open();
-    UTLT_Assert(nl != NULL, return STATUS_ERROR, "mnl socket open");
-
-    // Find the specific devices by its type
-    int genl_id = genl_lookup_family(nl, "gtp5g");
-    UTLT_Assert(genl_id >= 0, return STATUS_ERROR,
-                "GTP gen family not found");
-
-    // Find target devices
-    // TODO: get target device by config file
-    char gtp5g_int[] = "gtp5gtest";
-    uint32_t ifidx = if_nametoindex(gtp5g_int);
-    UTLT_Assert(ifidx != 0, return STATUS_ERROR, "wrong GTP interface");
-
-    // Set device information
-    // TODO: if dev can get from UPF context
-    struct gtp5g_dev *dev = gtp5g_dev_alloc();
-    gtp5g_dev_set_ifidx(dev, ifidx);
+    UTLT_Assert(pdr, return STATUS_ERROR, "push PDR not found");
+    Status status;
 
     switch (action) {
     case _PDR_ADD:
-        gtp5g_add_pdr(genl_id, nl, dev, pdr);
+        status = GtpTunnelAddPdr(gtp5g_int_name, pdr);
+        UTLT_Assert(status == STATUS_OK, return STATUS_ERROR,
+                    "Add PDR failed");
     case _PDR_MOD:
-        gtp5g_mod_pdr(genl_id, nl, dev, pdr);
+        status = GtpTunnelModPdr(gtp5g_int_name, pdr);
+        UTLT_Assert(status == STATUS_OK, return STATUS_ERROR,
+                    "Modify PDR failed");
     case _PDR_DEL:
-        gtp5g_del_pdr(genl_id, nl, dev, pdr);
+        uint16_t pdrId = gtp5g_pdr_get_id(pdr);
+        status = GtpTunnelDelPdr(gtp5g_int_name, pdrId);
+        UTLT_Assert(status == STATUS_OK, return STATUS_ERROR,
+                    "Delete PDR failed");
     }
-
-    // Free device
-    gtp5g_dev_free(dev);
-    // Close socket
-    genl_socket_close(nl);
 
     return STATUS_OK;
 }
 
 Status _pushFarToKernel(struct gtp5g_far *far, int action) {
-    // Create netlink socket
-    struct mnl_socket *nl = genl_socket_open();
-    UTLT_Assert(nl != NULL, return STATUS_ERROR, "mnl socket open");
-
-    // Find the specific devices by its type
-    int genl_id = genl_lookup_family(nl, "gtp5g");
-    UTLT_Assert(genl_id >= 0, return STATUS_ERROR,
-                "GTP gen family not found");
-
-    // Find target devices
-    // TODO: get target device by config file
-    char gtp5g_int[] = "gtp5gtest";
-    uint32_t ifidx = if_nametoindex(gtp5g_int);
-    UTLT_Assert(ifidx != 0, return STATUS_ERROR, "wrong GTP interface");
-
-    // Set device information
-    // TODO: if dev can get from UPF context
-    struct gtp5g_dev *dev = gtp5g_dev_alloc();
-    gtp5g_dev_set_ifidx(dev, ifidx);
+    UTLT_Assert(far, return STATUS_ERROR, "push FAR not found");
+    Status status;
 
     switch (action) {
     case _FAR_ADD:
-        gtp5g_add_far(genl_id, nl, dev, far);
+        status = GtpTunnelAddFar(gtp5g_int_name, far);
+        UTLT_Assert(status == STATUS_OK, return STATUS_ERROR,
+                    "Add FAR failed");
     case _FAR_MOD:
-        gtp5g_mod_far(genl_id, nl, dev, far);
+        status = GtpTunnelModFar(gtp5g_int_name, far);
+        UTLT_Assert(status == STATUS_OK, return STATUS_ERROR,
+                    "Modify FAR failed");
     case _FAR_DEL:
-        gtp5g_del_far(genl_id, nl, dev, far);
+        uint32_t farId = gtp5g_far_get_id(far);
+        status = GtpTunnelDelFar(gtp5g_int_name, farId);
+        UTLT_Assert(status == STATUS_OK, return STATUS_ERROR,
+                    "Delete FAR failed");
     }
-
-    // Free device
-    gtp5g_dev_free(dev);
-    // Close socket
-    genl_socket_close(nl);
 
     return STATUS_OK;
 }
@@ -228,9 +198,9 @@ Status UpfN4HandleUpdatePdr(UpdatePDR *updatePdr) {
 
     // Find PDR
     uint16_t pdrId = ntohs(*((uint16_t*)updatePdr->pDRID.value));
-    tmpPdr = GtpTunnelFindPdrById(gtp5g_int_name, tmpPdr);
+    tmpPdr = GtpTunnelFindPdrById(gtp5g_int_name, pdrId);
     UTLT_Assert(tmpPdr, return STATUS_ERROR,
-                "[PFCP] UpdatePDR PDR not found");
+                "[PFCP] UpdatePDR PDR[%u] not found", pdrId);
 
     // TODO: other IE of update PDR
     if (updatePdr->precedence.presence) {
@@ -290,7 +260,7 @@ Status UpfN4HandleUpdateFar(UpdateFAR *updateFar) {
     uint32_t farId = ntohl(*((uint32_t *)updateFar->fARID.value));
     tmpFar = GtpTunnelFindFarById(farId);
     UTLT_Assert(tmpFar, return STATUS_ERROR,
-                "[PFCP] UpdateFAR FAR not found");
+                "[PFCP] UpdateFAR FAR[%u] not found", farId);
 
     // update ApplyAction
     if (updateFar->applyAction.presence) {
@@ -326,7 +296,7 @@ Status UpfN4HandleUpdateFar(UpdateFAR *updateFar) {
 Status UpfN4HandleRemovePdr(uint16_t pdrId) {
     UpfPdr *pdr = GtpTunnelFindPdrById(pdrId);
     UTLT_Assert(pdr != NULL, return STATUS_ERROR,
-                "Cannot find PDR by PdrId");
+                "Cannot find PDR[%u] by PdrId", pdrId);
 
     uint16_t *id = ListFirst(&session->pdrIdList);
     while(id) {
@@ -348,9 +318,11 @@ Status UpfN4HandleRemovePdr(uint16_t pdrId) {
 }
 
 Status UpfN4HandleRemoveFar(uint32_t farId) {
+    UTLT_Assert(farId, return STATUS_ERROR,
+                "farId should not be 0");
     UpfFar *far = GtpTunnelFindFarById(farId);
     UTLT_Assert(far != NULL, return STATUS_ERROR,
-                "Cannot find FAR by FarId");
+                "Cannot find FAR[%u] by FarId", farId);
 
     UpfPdr *pdr = GtpTunnelFindPdrByFarId(farId);
     if (pdr) {
@@ -537,9 +509,9 @@ Status UpfN4HandleSessionDeletionRequest(UpfSession *session,
     // TODO: Remove all FAR
     for (uint16_t *pdrId = ListFirst(&session->pdrIdList);
          pdrId != NULL; pdrId = ListNext(pdrId)) {
-        status = GtpTunnelDelPdr(, pdrId);
+        status = GtpTunnelDelPdr(gtp5g_int_name, pdrId);
         UTLT_Assert(status == STATUS_OK, return STATUS_ERROR,
-                    "Remove PDR error");
+                    "Remove PDR[%u] error", pdrId);
     }
 
     /* delete session */
