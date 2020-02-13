@@ -21,6 +21,7 @@
 #include "pfcp_xact.h"
 #include "gtp5g.h"
 #include "gtp5gnl.h"
+#include "gtp_tunnel.h"
 
 
 #define MAX_POOL_OF_QER (MAX_POOL_OF_SESS * 2)

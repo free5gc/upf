@@ -72,7 +72,6 @@ PfcpXact *PfcpXactLocalCreate(PfcpNode *gnode, PfcpHeader *header, Bufblk *bufBl
     UTLT_Assert(gnode, return NULL, "node error");
 
     IndexAlloc(&pfcpXactPool, xact);
-    IndexCheck(&pfcpXactPool, "PfcpXactLocalCreate IndexAlloc end");
     // TODO: drop transaction allocation failed
     UTLT_Assert(xact, return NULL, "Transaction allocation failed");
 
@@ -120,7 +119,6 @@ PfcpXact *PfcpXactRemoteCreate(PfcpNode *gnode, uint32_t sqn) {
     UTLT_Assert(gnode, return NULL, "node error");
 
     IndexAlloc(&pfcpXactPool, xact);
-    IndexCheck(&pfcpXactPool, "PfcpXactRemoteCreate IndexAlloc end");
     // TODO: drop transaction allocation failed
     UTLT_Assert(xact, return NULL, "Transaction allocation failed");
 

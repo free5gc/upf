@@ -16,6 +16,7 @@
 #include "up/up_gtp_path.h"
 #include "gtp5g.h"
 #include "gtp5gnl.h"
+#include "gtp_tunnel.h"
 
 
 #define _PDR_ADD 0
