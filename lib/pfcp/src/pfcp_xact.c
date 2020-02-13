@@ -20,21 +20,21 @@
 #define PFCP_MAX_XACT_ID                0x800000
 
 #define PFCP_T3_RESPONSE_DURATION       3000 /* 3 seconds */
-#define PFCP_T3_RESPONSE_RETRY_COUNT    3 
+#define PFCP_T3_RESPONSE_RETRY_COUNT    3
 #define PFCP_T3_DUPLICATED_DURATION \
     (PFCP_T3_RESPONSE_DURATION * PFCP_T3_RESPONSE_RETRY_COUNT)  /* 9 seconds */
-#define PFCP_T3_DUPLICATED_RETRY_COUNT  1 
+#define PFCP_T3_DUPLICATED_RETRY_COUNT  1
 
 
 static int pfcpXactInitialized = 0; // if xact exist
 static TimerList *globalTimerList = NULL;
-static uint32_t globalResponseEvent = 0;
-static uint32_t globalHoldingEvent = 0;
+static uintptr_t globalResponseEvent = 0;
+static uintptr_t globalHoldingEvent = 0;
 static uint32_t globalXactId = 0;
 
 IndexDeclare(pfcpXactPool, PfcpXact, SIZE_OF_PFCP_XACT_POOL);
 
-Status PfcpXactInit(TimerList *timerList, uint32_t responseEvent, uint32_t holdingEvent) {
+Status PfcpXactInit(TimerList *timerList, uintptr_t responseEvent, uintptr_t holdingEvent) {
     UTLT_Assert(pfcpXactInitialized == 0, return STATUS_ERROR, "PFCP Xact have alread initialized");
     IndexInit(&pfcpXactPool, SIZE_OF_PFCP_XACT_POOL);
 
@@ -49,12 +49,15 @@ Status PfcpXactInit(TimerList *timerList, uint32_t responseEvent, uint32_t holdi
 }
 
 Status PfcpXactTerminate(void) {
-    UTLT_Assert(pfcpXactInitialized == 1, return STATUS_ERROR, "PFCP Xact already finalized");
+    UTLT_Assert(pfcpXactInitialized == 1, return STATUS_ERROR,
+                "PFCP Xact already finalized");
 
     if (PoolUsedCheck(&pfcpXactPool)) {
-        UTLT_Error("%d not freed in pfcpXactPool[%d] of PFCP Transaction", PoolUsedCheck(&pfcpXactPool), PoolSize(&pfcpXactPool));
+        UTLT_Error("%d not freed in pfcpXactPool[%d] of PFCP Transaction",
+                   PoolUsedCheck(&pfcpXactPool), PoolSize(&pfcpXactPool));
     }
-    UTLT_Trace("%d freed in pfcpXactPool[%d] of PFCP Transaction", PoolUsedCheck(&pfcpXactPool), PoolSize(&pfcpXactPool));
+    UTLT_Trace("%d freed in pfcpXactPool[%d] of PFCP Transaction",
+               PoolUsedCheck(&pfcpXactPool), PoolSize(&pfcpXactPool));
 
     IndexTerminate(&pfcpXactPool);
     pfcpXactInitialized = 0;
@@ -69,6 +72,9 @@ PfcpXact *PfcpXactLocalCreate(PfcpNode *gnode, PfcpHeader *header, Bufblk *bufBl
     UTLT_Assert(gnode, return NULL, "node error");
 
     IndexAlloc(&pfcpXactPool, xact);
+    IndexCheck(&pfcpXactPool, "PfcpXactLocalCreate IndexAlloc end");
+    // TODO: drop transaction allocation failed
+    UTLT_Assert(xact, return NULL, "Transaction allocation failed");
 
     UTLT_Trace("Alloc PFCP pool");
     UTLT_Assert(xact, return NULL, "Transaction allocation failed");
@@ -91,12 +97,15 @@ PfcpXact *PfcpXactLocalCreate(PfcpNode *gnode, PfcpHeader *header, Bufblk *bufBl
     }
     */
 
-    ListAppend(xact->origin == PFCP_LOCAL_ORIGINATOR ? &xact->gnode->localList : &xact->gnode->remoteList, xact);
+    ListAppend(xact->origin == PFCP_LOCAL_ORIGINATOR ?
+               &xact->gnode->localList : &xact->gnode->remoteList, xact);
 
     status = PfcpXactUpdateTx(xact, header, bufBlk);
     UTLT_Assert(status == STATUS_OK, goto err, "Update Tx failed");
 
-    UTLT_Trace("[%d] %s Create peer [%s]:%d\n", xact->transactionId, xact->origin == PFCP_LOCAL_ORIGINATOR ? "local" : "remote",
+    UTLT_Trace("[%d] %s Create peer [%s]:%d\n",
+               xact->transactionId, xact->origin == PFCP_LOCAL_ORIGINATOR ?
+               "local" : "remote",
             GetIP(&gnode->sock->remoteAddr), GetPort(&gnode->sock->remoteAddr));
     return xact;
 
@@ -111,6 +120,8 @@ PfcpXact *PfcpXactRemoteCreate(PfcpNode *gnode, uint32_t sqn) {
     UTLT_Assert(gnode, return NULL, "node error");
 
     IndexAlloc(&pfcpXactPool, xact);
+    IndexCheck(&pfcpXactPool, "PfcpXactRemoteCreate IndexAlloc end");
+    // TODO: drop transaction allocation failed
     UTLT_Assert(xact, return NULL, "Transaction allocation failed");
 
     xact->origin = PFCP_REMOTE_ORIGINATOR;
@@ -118,23 +129,29 @@ PfcpXact *PfcpXactRemoteCreate(PfcpNode *gnode, uint32_t sqn) {
     xact->gnode = gnode;
 
     if (globalResponseEvent) {
-        xact->timerResponse = EventTimerCreate(globalTimerList, TIMER_TYPE_ONCE, PFCP_T3_RESPONSE_DURATION);
+        xact->timerResponse = EventTimerCreate(
+                                globalTimerList, TIMER_TYPE_ONCE,
+                                PFCP_T3_RESPONSE_DURATION,
+                                globalResponseEvent);
         UTLT_Assert(xact->timerResponse, goto err, "Timer allocation failed");
-        TimerSet(PARAM1, xact->timerResponse, xact->index);
+        TimerSet(PARAM2, xact->timerResponse, xact->index);
         xact->responseReCount = PFCP_T3_RESPONSE_RETRY_COUNT;
     }
 
     if (globalHoldingEvent) {
-        xact->timerHolding = EventTimerCreate(globalTimerList, TIMER_TYPE_ONCE, PFCP_T3_RESPONSE_DURATION);
+        xact->timerHolding = EventTimerCreate(globalTimerList,
+                               TIMER_TYPE_ONCE, PFCP_T3_RESPONSE_DURATION,
+                               globalHoldingEvent);
         UTLT_Assert(xact->timerHolding, goto err, "Timer allocation failed");
-        TimerSet(PARAM1, xact->timerHolding, xact->index);
+        TimerSet(PARAM2, xact->timerHolding, xact->index);
         xact->holdingReCount = PFCP_T3_DUPLICATED_RETRY_COUNT;
     }
 
-    ListAppend(xact->origin == PFCP_LOCAL_ORIGINATOR ?  
+    ListAppend(xact->origin == PFCP_LOCAL_ORIGINATOR ?
             &xact->gnode->localList : &xact->gnode->remoteList, xact);
 
-    UTLT_Trace("[%d] %s Create  peer [%s]:%d\n", xact->transactionId, xact->origin == PFCP_LOCAL_ORIGINATOR ? "local " : "remote",
+    UTLT_Trace("[%d] %s Create  peer [%s]:%d\n", xact->transactionId,
+               xact->origin == PFCP_LOCAL_ORIGINATOR ? "local " : "remote",
             GetIP(&gnode->sock->remoteAddr), GetPort(&gnode->sock->remoteAddr));
 
     return xact;
@@ -157,7 +174,7 @@ void PfcpXactDeassociate(PfcpXact *xact1, PfcpXact *xact2) {
     return;
 }
 
-static Status PfcpXactDelete(PfcpXact *xact) {
+Status PfcpXactDelete(PfcpXact *xact) {
 
     UTLT_Assert(xact, , "xact error");
     UTLT_Assert(xact->gnode, , "node of xact error");
@@ -165,6 +182,19 @@ static Status PfcpXactDelete(PfcpXact *xact) {
     UTLT_Trace("[%d] %s Delete  peer [%s]:%d\n", xact->transactionId,
             xact->origin == PFCP_LOCAL_ORIGINATOR ? "local" : "remote",
             GetIP(&xact->gnode->sock->remoteAddr), GetPort(&xact->gnode->sock->remoteAddr));
+
+    if (xact->origin == PFCP_LOCAL_ORIGINATOR) {
+        ListRemove(&(xact->gnode->localList), xact);
+    } else if (xact->origin == PFCP_REMOTE_ORIGINATOR) {
+        ListRemove(&(xact->gnode->remoteList), xact);
+    }
+
+    xact->origin = 0;
+    xact->transactionId = 0;
+    xact->step = 0;
+    xact->seq[0].type = 0;
+    xact->seq[1].type = 0;
+    xact->seq[2].type = 0;
 
     if (xact->seq[0].bufBlk) {
         BufblkFree(xact->seq[0].bufBlk);
@@ -187,7 +217,8 @@ static Status PfcpXactDelete(PfcpXact *xact) {
         PfcpXactDeassociate(xact, xact->associatedXact);
     }
 
-    ListRemove(xact->origin == PFCP_LOCAL_ORIGINATOR ? &xact->gnode->localList : &xact->gnode->remoteList, xact);
+    ListRemove(xact->origin == PFCP_LOCAL_ORIGINATOR ?
+               &xact->gnode->localList : &xact->gnode->remoteList, xact);
     IndexFree(&pfcpXactPool, xact);
 
     return STATUS_OK;
@@ -255,24 +286,33 @@ Status PfcpXactUpdateTx(PfcpXact *xact, PfcpHeader *header, Bufblk *bufBlk) {
     UTLT_Assert(header, return STATUS_ERROR, "header error");
     UTLT_Assert(bufBlk, return STATUS_ERROR, "buffer error");
 
-    UTLT_Trace("[%d] %s UDP TX-%d peer [%s]:%d\n", xact->transactionId, xact->origin == PFCP_LOCAL_ORIGINATOR ? "local " : "remote",
-            header->type, GetIP(&xact->gnode->sock->remoteAddr), GetPort(&xact->gnode->sock->remoteAddr));
+    UTLT_Trace("[%d] %s UDP TX-%d peer [%s]:%d\n",
+               xact->transactionId, xact->origin == PFCP_LOCAL_ORIGINATOR ?
+               "local " : "remote",
+               header->type, GetIP(&xact->gnode->sock->remoteAddr),
+               GetPort(&xact->gnode->sock->remoteAddr));
 
     stage = PfcpXactGetStage(header->type, xact->transactionId);
     if (xact->origin == PFCP_LOCAL_ORIGINATOR) {
         switch(stage) {
             case PFCP_XACT_INITIAL_STAGE:
-                UTLT_Assert(xact->step == 0, return STATUS_ERROR, "[%d] %s invalid step %d for type %d peer [%s]:%d\n",
-                        xact->transactionId, xact->origin == PFCP_LOCAL_ORIGINATOR ? "local " : "remote", xact->step, header->type,
-                        GetIP(&xact->gnode->sock->remoteAddr), GetPort(&xact->gnode->sock->remoteAddr));
+                UTLT_Assert(xact->step == 0, return STATUS_ERROR,
+                            "[%d] %s invalid step %d for type %d peer [%s]:%d\n",
+                            xact->transactionId, xact->origin == PFCP_LOCAL_ORIGINATOR ?
+                            "local " : "remote", xact->step, header->type,
+                            GetIP(&xact->gnode->sock->remoteAddr),
+                            GetPort(&xact->gnode->sock->remoteAddr));
                 break;
             case PFCP_XACT_INTERMEDIATE_STAGE:
                 UTLT_Assert(0, return STATUS_ERROR, "invalid step(%d)", xact->step);
                 break;
             case PFCP_XACT_FINAL_STAGE:
-                UTLT_Assert(xact->step == 2, return STATUS_ERROR, "[%d] %s invalid step %d for type %d peer [%s]:%d\n",
-                        xact->transactionId, xact->origin == PFCP_LOCAL_ORIGINATOR ? "local " : "remote", xact->step, header->type,
-                        GetIP(&xact->gnode->sock->remoteAddr), GetPort(&xact->gnode->sock->remoteAddr));
+                UTLT_Assert(xact->step == 2, return STATUS_ERROR,
+                            "[%d] %s invalid step %d for type %d peer [%s]:%d\n",
+                            xact->transactionId, xact->origin == PFCP_LOCAL_ORIGINATOR ?
+                            "local " : "remote", xact->step, header->type,
+                            GetIP(&xact->gnode->sock->remoteAddr),
+                            GetPort(&xact->gnode->sock->remoteAddr));
                 break;
             default:
                 UTLT_Assert(0, return STATUS_ERROR, "invalid step(%d)", xact->step);
@@ -284,9 +324,12 @@ Status PfcpXactUpdateTx(PfcpXact *xact, PfcpHeader *header, Bufblk *bufBlk) {
                 break;
             case PFCP_XACT_INTERMEDIATE_STAGE:
             case PFCP_XACT_FINAL_STAGE:
-                UTLT_Assert(xact->step == 1, return STATUS_ERROR, "[%d] %s invalid step %d for type %d peer [%s]:%d\n",
-                        xact->transactionId, xact->origin == PFCP_LOCAL_ORIGINATOR ? "local " : "remote", xact->step, header->type,
-                        GetIP(&xact->gnode->sock->remoteAddr), GetPort(&xact->gnode->sock->remoteAddr));
+                UTLT_Assert(xact->step == 1, return STATUS_ERROR,
+                            "[%d] %s invalid step %d for type %d peer [%s]:%d\n",
+                            xact->transactionId, xact->origin == PFCP_LOCAL_ORIGINATOR ?
+                            "local " : "remote", xact->step, header->type,
+                            GetIP(&xact->gnode->sock->remoteAddr),
+                            GetPort(&xact->gnode->sock->remoteAddr));
                 break;
             default:
                 UTLT_Assert(0, return STATUS_ERROR, "invalid step(%d)", xact->step);
@@ -333,9 +376,11 @@ Status PfcpXactUpdateTx(PfcpXact *xact, PfcpHeader *header, Bufblk *bufBlk) {
 Status PfcpXactUpdateRx(PfcpXact *xact, uint8_t type) {
     Status status = STATUS_OK;
     PfcpXactStage stage;
-    
-    UTLT_Trace("[%d] %s UDP RX-%d peer [%s]:%d\n", xact->transactionId, xact->origin == PFCP_LOCAL_ORIGINATOR ? "local " : "remote",
-            type, GetIP(&xact->gnode->sock->remoteAddr), GetPort(&xact->gnode->sock->remoteAddr) );
+
+    UTLT_Trace("[%d] %s UDP RX-%d peer [%s]:%d\n", xact->transactionId,
+               xact->origin == PFCP_LOCAL_ORIGINATOR ? "local " : "remote",
+               type, GetIP(&xact->gnode->sock->remoteAddr),
+               GetPort(&xact->gnode->sock->remoteAddr) );
 
     stage = PfcpXactGetStage(type, xact->transactionId);
     if (xact->origin == PFCP_LOCAL_ORIGINATOR) {
@@ -347,9 +392,13 @@ Status PfcpXactUpdateRx(PfcpXact *xact, uint8_t type) {
                 if (xact->seq[1].type == type) {
                     Bufblk *bufBlk = NULL;
 
-                    UTLT_Assert(xact->step == 2 || xact->step == 3, return STATUS_ERROR, "[%d] %s invalid step %d for type %d peer [%s]:%d",
-                            xact->transactionId, xact->origin == PFCP_LOCAL_ORIGINATOR ? "local " : "remote", xact->step, type,
-                            GetIP(&xact->gnode->sock->remoteAddr), GetPort(&xact->gnode->sock->remoteAddr));
+                    UTLT_Assert(xact->step == 2 || xact->step == 3,
+                                return STATUS_ERROR,
+                                "[%d] %s invalid step %d for type %d peer [%s]:%d",
+                                xact->transactionId, xact->origin == PFCP_LOCAL_ORIGINATOR ?
+                                "local " : "remote", xact->step, type,
+                                GetIP(&xact->gnode->sock->remoteAddr),
+                                GetPort(&xact->gnode->sock->remoteAddr));
 
                     bufBlk = xact->seq[2].bufBlk;
                     if (bufBlk) {
@@ -357,31 +406,41 @@ Status PfcpXactUpdateRx(PfcpXact *xact, uint8_t type) {
                             TimerStart(xact->timerHolding);
                         }
                         UTLT_Warning("[%d] %s Request Duplicated. Retransmit! for type %d peer [%s]:%d",
-                                xact->transactionId, xact->origin == PFCP_LOCAL_ORIGINATOR ? "local" : "remote",
-                                xact->step, type, GetIP(&xact->gnode->sock->remoteAddr), GetPort(&xact->gnode->sock->remoteAddr));
+                                     xact->transactionId, xact->origin == PFCP_LOCAL_ORIGINATOR ?
+                                     "local" : "remote", xact->step, type,
+                                     GetIP(&xact->gnode->sock->remoteAddr),
+                                     GetPort(&xact->gnode->sock->remoteAddr));
                         status = PfcpSend(xact->gnode, bufBlk);
                         UTLT_Assert(status == STATUS_OK, return STATUS_ERROR, "PfcpSend error");
                     } else {
                         UTLT_Warning("[%d] %s Request Duplicated. Discard! for type %d peer [%s]:%d",
-                                xact->transactionId, xact->origin == PFCP_LOCAL_ORIGINATOR ? "local" : "remote",
-                                xact->step, type, GetIP(&xact->gnode->sock->remoteAddr), GetPort(&xact->gnode->sock->remoteAddr));
+                                     xact->transactionId, xact->origin == PFCP_LOCAL_ORIGINATOR ?
+                                     "local" : "remote", xact->step, type,
+                                     GetIP(&xact->gnode->sock->remoteAddr),
+                                     GetPort(&xact->gnode->sock->remoteAddr));
                     }
 
                     return STATUS_EAGAIN;
                 }
 
-                UTLT_Assert(xact->step == 1, return STATUS_ERROR, "[%d] %s invalid step %d for type %d peer [%s]:%d",
-                        xact->transactionId, xact->origin == PFCP_LOCAL_ORIGINATOR ? "local" : "remote",
-                        xact->step, type, GetIP(&xact->gnode->sock->remoteAddr), GetPort(&xact->gnode->sock->remoteAddr));
+                UTLT_Assert(xact->step == 1, return STATUS_ERROR,
+                            "[%d] %s invalid step %d for type %d peer [%s]:%d",
+                            xact->transactionId, xact->origin == PFCP_LOCAL_ORIGINATOR ?
+                            "local" : "remote", xact->step, type,
+                            GetIP(&xact->gnode->sock->remoteAddr),
+                            GetPort(&xact->gnode->sock->remoteAddr));
 
                 if (xact->timerHolding) {
                     TimerStart(xact->timerHolding);
                 }
                 break;
             case PFCP_XACT_FINAL_STAGE:
-                UTLT_Assert(xact->step == 1, return STATUS_ERROR, "[%d] %s invalid step %d for type %d peer [%s]:%d",
-                            xact->transactionId, xact->origin == PFCP_LOCAL_ORIGINATOR ? "local " : "remote", xact->step, type,
-                            GetIP(&xact->gnode->sock->remoteAddr), GetPort(&xact->gnode->sock->remoteAddr));
+                UTLT_Assert(xact->step == 1, return STATUS_ERROR,
+                            "[%d] %s invalid step %d for type %d peer [%s]:%d",
+                            xact->transactionId, xact->origin == PFCP_LOCAL_ORIGINATOR ?
+                            "local " : "remote", xact->step, type,
+                            GetIP(&xact->gnode->sock->remoteAddr),
+                            GetPort(&xact->gnode->sock->remoteAddr));
                 break;
             default:
                 UTLT_Assert(0, return STATUS_ERROR, "invalid step(%d)", xact->step);
@@ -389,37 +448,46 @@ Status PfcpXactUpdateRx(PfcpXact *xact, uint8_t type) {
     } else if (xact->origin == PFCP_REMOTE_ORIGINATOR) {
         switch(stage) {
             case PFCP_XACT_INITIAL_STAGE:
-                if (xact->seq[0].type == type)
-                {
+                if (xact->seq[0].type == type) {
                     Bufblk *bufBlk = NULL;
 
-                    UTLT_Assert(xact->step == 1 || xact->step == 2, return STATUS_ERROR, "[%d] %s invalid step %d for type %d peer [%s]:%d",
-                            xact->transactionId, xact->origin == PFCP_LOCAL_ORIGINATOR ? "local" : "remote", xact->step, type,
-                            GetIP(&xact->gnode->sock->remoteAddr), GetPort(&xact->gnode->sock->remoteAddr));
+                    UTLT_Assert(xact->step == 1 || xact->step == 2, return STATUS_ERROR,
+                                "[%d] %s invalid step %d for type %d peer [%s]:%d",
+                                xact->transactionId, xact->origin == PFCP_LOCAL_ORIGINATOR ?
+                                "local" : "remote", xact->step, type,
+                                GetIP(&xact->gnode->sock->remoteAddr),
+                                GetPort(&xact->gnode->sock->remoteAddr));
 
                     bufBlk = xact->seq[1].bufBlk;
-                    if (bufBlk)
-                    {
-                        if (xact->timerHolding)
+                    if (bufBlk) {
+                        if (xact->timerHolding) {
                             TimerStart(xact->timerHolding);
+                        }
 
-                        UTLT_Warning("[%d] %s Request Duplicated. Retransmit! for step %d type %d peer [%s]:%d", xact->transactionId,
-                                xact->origin == PFCP_LOCAL_ORIGINATOR ? "local" : "remote", xact->step, type,
-                                GetIP(&xact->gnode->sock->remoteAddr), GetPort(&xact->gnode->sock->remoteAddr));
+                        UTLT_Warning("[%d] %s Request Duplicated. Retransmit! for step %d type %d peer [%s]:%d",
+                                     xact->transactionId, xact->origin == PFCP_LOCAL_ORIGINATOR ?
+                                     "local" : "remote", xact->step, type,
+                                     GetIP(&xact->gnode->sock->remoteAddr),
+                                     GetPort(&xact->gnode->sock->remoteAddr));
                         status = PfcpSend(xact->gnode, bufBlk);
                         UTLT_Assert(status == STATUS_OK, return STATUS_ERROR, "PfcpSend error");
                     } else {
                         UTLT_Warning("[%d] %s Request Duplicated. Discard!  for step %d type %d peer [%s]:%d",
-                                xact->transactionId, xact->origin == PFCP_LOCAL_ORIGINATOR ? "local" : "remote",
-                                xact->step, type, GetIP(&xact->gnode->sock->remoteAddr), GetPort(&xact->gnode->sock->remoteAddr));
+                                     xact->transactionId, xact->origin == PFCP_LOCAL_ORIGINATOR ?
+                                     "local" : "remote", xact->step, type,
+                                     GetIP(&xact->gnode->sock->remoteAddr),
+                                     GetPort(&xact->gnode->sock->remoteAddr));
                     }
 
                     return STATUS_EAGAIN;
                 }
 
-                UTLT_Assert(xact->step == 0, return STATUS_ERROR, "[%d] %s invalid step %d for type %d peer [%s]:%d",
-                        xact->transactionId, xact->origin == PFCP_LOCAL_ORIGINATOR ? "local" : "remote", xact->step, type,
-                        GetIP(&xact->gnode->sock->remoteAddr), GetPort(&xact->gnode->sock->remoteAddr));
+                UTLT_Assert(xact->step == 0, return STATUS_ERROR,
+                            "[%d] %s invalid step %d for type %d peer [%s]:%d",
+                            xact->transactionId, xact->origin == PFCP_LOCAL_ORIGINATOR ?
+                            "local" : "remote", xact->step, type,
+                            GetIP(&xact->gnode->sock->remoteAddr),
+                            GetPort(&xact->gnode->sock->remoteAddr));
 
                 if (xact->timerHolding) {
                     TimerStart(xact->timerHolding);
@@ -431,9 +499,12 @@ Status PfcpXactUpdateRx(PfcpXact *xact, uint8_t type) {
                 break;
 
             case PFCP_XACT_FINAL_STAGE:
-                UTLT_Assert(xact->step == 2, return STATUS_ERROR, "[%d] %s invalid step %d for type %d peer [%s]:%d",
-                        xact->transactionId, xact->origin == PFCP_LOCAL_ORIGINATOR ? "local" : "remote", xact->step, type,
-                        GetIP(&xact->gnode->sock->remoteAddr), GetPort(&xact->gnode->sock->remoteAddr));
+                UTLT_Assert(xact->step == 2, return STATUS_ERROR,
+                            "[%d] %s invalid step %d for type %d peer [%s]:%d",
+                            xact->transactionId, xact->origin == PFCP_LOCAL_ORIGINATOR ?
+                            "local" : "remote", xact->step, type,
+                            GetIP(&xact->gnode->sock->remoteAddr),
+                            GetPort(&xact->gnode->sock->remoteAddr));
                 break;
 
             default:
@@ -460,7 +531,7 @@ Status PfcpXactCommit(PfcpXact *xact) {
     uint8_t type;
     Bufblk *bufBlk = NULL;
     PfcpXactStage stage;
-    
+
     UTLT_Assert(xact, return STATUS_ERROR, "xact error");
     UTLT_Assert(xact->gnode, return STATUS_ERROR, "node of xact error");
 
@@ -474,9 +545,12 @@ Status PfcpXactCommit(PfcpXact *xact) {
     if (xact->origin == PFCP_LOCAL_ORIGINATOR) {
         switch(stage) {
             case PFCP_XACT_INITIAL_STAGE:
-                UTLT_Assert(xact->step == 1, return STATUS_ERROR, "[%d] %s invalid step %d for type %d peer [%s]:%d",
-                        xact->transactionId, xact->origin == PFCP_LOCAL_ORIGINATOR ? "local" : "remote", xact->step, type,
-                        GetIP(&xact->gnode->sock->remoteAddr), GetPort(&xact->gnode->sock->remoteAddr));
+                UTLT_Assert(xact->step == 1, return STATUS_ERROR,
+                            "[%d] %s invalid step %d for type %d peer [%s]:%d",
+                            xact->transactionId, xact->origin == PFCP_LOCAL_ORIGINATOR ?
+                            "local" : "remote", xact->step, type,
+                            GetIP(&xact->gnode->sock->remoteAddr),
+                            GetPort(&xact->gnode->sock->remoteAddr));
 
                 if (xact->timerResponse) {
                     TimerStart(xact->timerResponse);
@@ -487,9 +561,12 @@ Status PfcpXactCommit(PfcpXact *xact) {
                 UTLT_Assert(0, return STATUS_ERROR, "invalid step(%d)", xact->step);
 
             case PFCP_XACT_FINAL_STAGE:
-                UTLT_Assert(xact->step == 2 || xact->step == 3, return STATUS_ERROR, "[%d] %s invalid step %d for type %d peer [%s]:%d",
-                        xact->transactionId, xact->origin == PFCP_LOCAL_ORIGINATOR ? "local" : "remote", xact->step, type,
-                        GetIP(&xact->gnode->sock->remoteAddr), GetPort(&xact->gnode->sock->remoteAddr));
+                UTLT_Assert(xact->step == 2 || xact->step == 3, return STATUS_ERROR,
+                            "[%d] %s invalid step %d for type %d peer [%s]:%d",
+                            xact->transactionId, xact->origin == PFCP_LOCAL_ORIGINATOR ?
+                            "local" : "remote", xact->step, type,
+                            GetIP(&xact->gnode->sock->remoteAddr),
+                            GetPort(&xact->gnode->sock->remoteAddr));
 
                 if (xact->step == 2) {
                     PfcpXactDelete(xact);
@@ -507,9 +584,12 @@ Status PfcpXactCommit(PfcpXact *xact) {
                 UTLT_Assert(0, return STATUS_ERROR, "invalid step(%d)", xact->step);
 
             case PFCP_XACT_INTERMEDIATE_STAGE:
-                UTLT_Assert(xact->step == 2, return STATUS_ERROR, "[%d] %s invalid step %d for type %d peer [%s]:%d",
-                        xact->transactionId, xact->origin == PFCP_LOCAL_ORIGINATOR ? "local" : "remote", xact->step, type,
-                        GetIP(&xact->gnode->sock->remoteAddr), GetPort(&xact->gnode->sock->remoteAddr));
+                UTLT_Assert(xact->step == 2, return STATUS_ERROR,
+                            "[%d] %s invalid step %d for type %d peer [%s]:%d",
+                            xact->transactionId, xact->origin == PFCP_LOCAL_ORIGINATOR ?
+                            "local" : "remote", xact->step, type,
+                            GetIP(&xact->gnode->sock->remoteAddr),
+                            GetPort(&xact->gnode->sock->remoteAddr));
 
                 if (xact->timerResponse) {
                     TimerStart(xact->timerResponse);
@@ -517,9 +597,12 @@ Status PfcpXactCommit(PfcpXact *xact) {
                 break;
 
             case PFCP_XACT_FINAL_STAGE:
-                UTLT_Assert(xact->step == 2 || xact->step == 3, return STATUS_ERROR, "[%d] %s invalid step %d for type %d peer [%s]:%d",
-                        xact->transactionId, xact->origin == PFCP_LOCAL_ORIGINATOR ? "local" : "remote", xact->step, type,
-                        GetIP(&xact->gnode->sock->remoteAddr), GetPort(&xact->gnode->sock->remoteAddr));
+                UTLT_Assert(xact->step == 2 || xact->step == 3, return STATUS_ERROR,
+                            "[%d] %s invalid step %d for type %d peer [%s]:%d",
+                            xact->transactionId, xact->origin == PFCP_LOCAL_ORIGINATOR ?
+                            "local" : "remote", xact->step, type,
+                            GetIP(&xact->gnode->sock->remoteAddr),
+                            GetPort(&xact->gnode->sock->remoteAddr));
 
                 if (xact->step == 3) {
                     PfcpXactDelete(xact);
@@ -544,9 +627,9 @@ Status PfcpXactCommit(PfcpXact *xact) {
 }
 
 Status PfcpXactTimeout(uint32_t index, uint32_t event, uint8_t *type) {
+    UTLT_Trace("[Timer Debug] PfcpXactTimeout index %d and event %d", index, event);
     PfcpXact *xact = NULL;
     
-    UTLT_Assert(index, goto out, "Invalid Index");
     xact = IndexFind(&pfcpXactPool, index);
     UTLT_Assert(xact, goto out, "index find from pool error");
     UTLT_Assert(xact->gnode, goto out, "node of xact error");
@@ -556,9 +639,10 @@ Status PfcpXactTimeout(uint32_t index, uint32_t event, uint8_t *type) {
 
     if (event == globalResponseEvent) {
         UTLT_Trace("[%d] %s Response Timeout for step %d type %d peer [%s]:%d\n",
-                xact->transactionId, xact->origin == PFCP_LOCAL_ORIGINATOR ? "local" : "remote",
-                xact->step, xact->seq[xact->step-1].type,
-                GetIP(&xact->gnode->sock->remoteAddr), GetPort(&xact->gnode->sock->remoteAddr));
+                   xact->transactionId, xact->origin == PFCP_LOCAL_ORIGINATOR ?
+                   "local" : "remote", xact->step, xact->seq[xact->step-1].type,
+                   GetIP(&xact->gnode->sock->remoteAddr),
+                   GetPort(&xact->gnode->sock->remoteAddr));
 
         if (--xact->responseReCount > 0) {
             Bufblk *bufBlk = NULL;

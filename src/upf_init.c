@@ -63,7 +63,8 @@ Status UpfInit(char *configPath) {
     status = PfcpServerInit();
     if (status != STATUS_OK) return status;
 
-    status = PfcpXactInit(&Self()->timerServiceList, UPF_EVENT_N4_T3_RESPONSE, UPF_EVENT_N4_T3_HOLDING); // init pfcp xact context
+    status = PfcpXactInit(&Self()->timerServiceList, UPF_EVENT_N4_T3_RESPONSE,
+                          UPF_EVENT_N4_T3_HOLDING); // init pfcp xact context
     if (status != STATUS_OK) return status;
 
     status = GtpRouteInit();
@@ -184,6 +185,10 @@ void PacketReceiverThread(ThreadID id, void *data) {
     int nfds;
     Sock *sockPtr;
     struct epoll_event events[MAX_NUM_OF_EVENT];
+    utime_t prev, now; // For timer checking purpose
+
+    prev = TimeNow();
+
     while (!ThreadStop()) {
         nfds = EpollWait(Self()->epfd, events, 1);
         UTLT_Assert(nfds >= 0, , "Epoll Wait error : %s", strerror(errno));
@@ -194,6 +199,16 @@ void PacketReceiverThread(ThreadID id, void *data) {
             // TODO : Log may show which socket
             UTLT_Assert(status == STATUS_OK, , "Error handling UP socket");
         }
+
+        // Check if timer expired
+        now = TimeNow();
+        if (now - prev > 10) {
+            TimerExpireCheck(
+                    &Self()->timerServiceList, Self()->eventQ);
+
+            prev = now;
+        }
+
     }
 
     sem_post(((Thread *)id)->semaphore);
