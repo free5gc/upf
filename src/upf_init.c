@@ -103,6 +103,9 @@ Status UpfTerminate() {
     UTLT_Assert(UtltLibTerminate() == STATUS_OK, status |= STATUS_ERROR,
                 "UPF library terminate failed");
 
+    UTLT_Assert(PfcpXactTerminate() == STATUS_OK, status |= STATUS_ERROR,
+                "PFCP Transaction terminate failed");
+
     if (status == STATUS_OK)
         UTLT_Info("UPF terminated");
     else
