@@ -92,8 +92,10 @@ int gtp5g_add_far(int genl_id, struct mnl_socket *nl, struct gtp5g_dev *dev, str
                                GTP5G_CMD_ADD_FAR);
     gtp5g_build_far_payload(nlh, dev, far);
 
-    if (genl_socket_talk(nl, nlh, seq, NULL, NULL) < 0)
+    if (genl_socket_talk(nl, nlh, seq, NULL, NULL) < 0) {
         perror("genl_socket_talk");
+        return -1;
+    }
 
     return 0;
 }
@@ -114,8 +116,10 @@ int gtp5g_mod_far(int genl_id, struct mnl_socket *nl, struct gtp5g_dev *dev, str
                                GTP5G_CMD_ADD_FAR);
     gtp5g_build_far_payload(nlh, dev, far);
 
-    if (genl_socket_talk(nl, nlh, seq, NULL, NULL) < 0)
+    if (genl_socket_talk(nl, nlh, seq, NULL, NULL) < 0) {
         perror("genl_socket_talk");
+        return -1;
+    }
 
     return 0;
 }
@@ -137,8 +141,10 @@ int gtp5g_del_far(int genl_id, struct mnl_socket *nl, struct gtp5g_dev *dev, str
                                GTP5G_CMD_DEL_FAR);
     gtp5g_build_far_payload(nlh, dev, far);
 
-    if (genl_socket_talk(nl, nlh, seq, NULL, NULL) < 0)
+    if (genl_socket_talk(nl, nlh, seq, NULL, NULL) < 0) {
         perror("genl_socket_talk");
+        return -1;
+    }
 
     return 0;
 }
@@ -306,7 +312,7 @@ int gtp5g_list_far(int genl_id, struct mnl_socket *nl)
 
     if (genl_socket_talk(nl, nlh, seq, genl_gtp5g_attr_list_cb, NULL) < 0) {
         perror("genl_socket_talk");
-        return 0;
+        return -1;
     }
 
     return 0;

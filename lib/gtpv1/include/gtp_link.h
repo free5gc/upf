@@ -2,6 +2,7 @@
 #define __GTP_LINK_H__
 
 #include <netinet/in.h>
+#include <libmnl/libmnl.h>
 
 #include "utlt_lib.h"
 #include "utlt_debug.h"
@@ -12,6 +13,12 @@
 #define GTP_PRIME_PORT 3386
 
 typedef struct {
+    struct mnl_socket *nl;
+    int32_t genl_id;
+    uint32_t ifidx;
+} NetlinkInfo;
+
+typedef struct {
     ListNode node;
     char ip[INET6_ADDRSTRLEN], ifname[MAX_IFNAME_STRLEN];
     Sock *sock;
@@ -20,7 +27,10 @@ typedef struct {
 Status GtpLinkCreate(Gtpv1TunDevNode *node);
 Status GtpLinkFree(Gtpv1TunDevNode *node);
 
-// TODO: Need to translate to pdr and far
+Status NetlinkSockOpen(NetlinkInfo *info, const char *ifname, const char *family_name);
+Status NetlinkSockClose(NetlinkInfo *info);
+
+// TODO: Need to delete
 Status GtpTunnelAdd(const char *ifname, int iteid, int oteid, const char *destIP, const char *tunIP);
 Status GtpTunnelDel(const char *ifname, int iteid);
 Status GtpTunnelList();
