@@ -31,7 +31,7 @@ Status _pushPdrToKernel(struct gtp5g_pdr *pdr, int action) {
     UTLT_Assert(pdr, return STATUS_ERROR, "push PDR not found");
     Status status;
 
-    uint16_t pdrId = gtp5g_pdr_get_id(pdr);
+    uint16_t pdrId = *(uint16_t*)gtp5g_pdr_get_id(pdr);
 
     switch (action) {
     case _PDR_ADD:
@@ -61,7 +61,7 @@ Status _pushFarToKernel(struct gtp5g_far *far, int action) {
     UTLT_Assert(far, return STATUS_ERROR, "push FAR not found");
     Status status;
 
-    uint32_t farId = gtp5g_far_get_id(far);
+    uint32_t farId = *(uint32_t*)gtp5g_far_get_id(far);
 
     switch (action) {
     case _FAR_ADD:
@@ -294,7 +294,7 @@ Status UpfN4HandleUpdateFar(UpdateFAR *updateFar) {
 
     // Find FAR
     uint32_t farId = ntohl(*((uint32_t *)updateFar->fARID.value));
-    tmpFar = GtpTunnelFindFarById(farId);
+    tmpFar = GtpTunnelFindFarById(gtp5g_int_name, farId);
     UTLT_Assert(tmpFar, return STATUS_ERROR,
                 "[PFCP] UpdateFAR FAR[%u] not found", farId);
 
@@ -358,15 +358,15 @@ Status UpfN4HandleRemoveFar(uint32_t farId) {
                 "farId should not be 0");
 
     // TODO: here can be speedup like
-    //UpfPdr *pdr = GtpTunnelFindPdrByFarId(farId);
+    //UpfPdr *pdr = GtpTunnelFindPdrByFarId(gtp5g_int_name, farId);
     //if (pdr) {
     //    gtp5g_pdr_set_far_id(pdr, 0);
     //}
-    //Status status = GtpTunnelDelFar(farId);
+    //Status status = GtpTunnelDelFar(gtp5g_int_name, farId);
     //UTLT_Assert(status == STATUS_OK, return STATUS_ERROR,
     //            "FAR delete error");
 
-    UpfFar *far = GtpTunnelFindFarById(farId);
+    UpfFar *far = GtpTunnelFindFarById(gtp5g_int_name, farId);
     UTLT_Assert(far != NULL, return STATUS_ERROR,
                 "Cannot find FAR[%u] by FarId", farId);
 
