@@ -62,18 +62,19 @@ Status PfcpXactInit(TimerList *timerList, uintptr_t responseEvent, uintptr_t hol
 Status PfcpXactTerminate(void);
 PfcpXact *PfcpXactLocalCreate(PfcpNode *gnode, PfcpHeader *header, Bufblk *bufBlk);
 PfcpXact *PfcpXactRemoteCreate(PfcpNode *gnode, uint32_t sqn);
-void PfcpXactDeleteAll(PfcpNode *gnode);
 Status PfcpXactUpdateTx(PfcpXact *xact, PfcpHeader *header, Bufblk *bufBlk);
 Status PfcpXactUpdateRx(PfcpXact *xact, uint8_t type);
 Status PfcpXactCommit(PfcpXact *xact);
 Status PfcpXactTimeout(uint32_t index, uint32_t event, uint8_t *type);
 Status PfcpXactReceive(PfcpNode *gnode, PfcpHeader *header, PfcpXact **xact);
+// Used by local only
+void PfcpXactDeleteAll(PfcpNode *gnode);
 PfcpXact *PfcpXactFind(uint32_t index);
 //static PfcpXactStage PfcpXactGetStage(uint8_t type, uint32_t transactionId);
 PfcpXact *PfcpXactFindByTransactionId(PfcpNode *gnode, uint8_t type, uint32_t transactionId);
-//void PfcpXactAssociate(PfcpXact *xact1, PfcpXact *xact2);
-//void PfcpXactDeassociate(PfcpXact *xact1, PfcpXact *xact2);
-//static Status PfcpXactDelete(PfcpXact *xact);
+void PfcpXactAssociate(PfcpXact *xact1, PfcpXact *xact2);
+void PfcpXactDeassociate(PfcpXact *xact1, PfcpXact *xact2);
+Status PfcpXactDelete(PfcpXact *xact);
 
 
 #ifdef __cplusplus
