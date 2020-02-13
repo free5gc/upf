@@ -27,7 +27,7 @@ EvtQId EventQueueCreate(int option) {
 Status EventQueueDelete(EvtQId eqId) {
     EvtQInfo *evtq = (EvtQInfo*) eqId;
     Status status;
-    
+
     UTLT_Assert(evtq, return STATUS_ERROR, "");
     status = MQDelete(evtq->mqId);
 
@@ -61,7 +61,7 @@ Status EventSend(EvtQId eqId, uintptr_t eventType, int argc, ...) {
 Status EventRecv(EvtQId eqId, Event *event) {
     EvtQInfo *evtq = (EvtQInfo*) eqId;
     UTLT_Assert(evtq, return STATUS_ERROR, "");
-    
+
     return MQRecv(evtq->mqId, (char*) event, evtq->msgsize);
 }
 
@@ -69,7 +69,7 @@ void EventTimerExpire(uintptr_t data, uintptr_t param[]) {
     EvtQId queue = data;
     Event event;
     Status status;
-    
+
     UTLT_Assert(queue, return, "queue error");
 
     event.type = param[0];
@@ -79,18 +79,18 @@ void EventTimerExpire(uintptr_t data, uintptr_t param[]) {
     event.arg3 = param[4];
     event.arg4 = param[5];
 
-    status = EventSend(queue, (uintptr_t)&event, 6);
+    status = EventSend(queue, event.type, 5, event.arg0, event.arg1, event.arg2, event.arg3, event.arg4);
 
     if (status != STATUS_OK) {
         UTLT_Error("event send error: %d", status);
     }
 }
 
-TimerBlkID EventTimerCreate(TimerList *timerList, int type, uint32_t duration) {
+TimerBlkID EventTimerCreate(TimerList *timerList, int type, uint32_t duration, uintptr_t event) {
     TimerBlkID id;
 
     id = TimerCreate(timerList, type, duration, EventTimerExpire);
-    TimerSet(PARAM1, id, (uintptr_t)EventTimerExpire);
+    TimerSet(PARAM1, id, event);
 
     return id;
 }

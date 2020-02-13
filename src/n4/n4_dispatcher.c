@@ -143,9 +143,12 @@ freeRecvBuf:
         break;
     }
     case UPF_EVENT_N4_T3_RESPONSE:
-    case UPF_EVENT_N4_T3_HOLDING: {
+    case UPF_EVENT_N4_T3_HOLDING:
+    UTLT_Trace("[Timer Debug] UPF_EVENT_N4_T3_RESPONSE or UPF_EVENT_N4_T3_HOLDING \\
+               event type %d and event arg0 %d", event->type, event->arg0);
+    {
         uint8_t type;
-        PfcpXactTimeout(*((uint32_t*)event->arg0), (UpfEvent)event->type, &type);
+        PfcpXactTimeout((uint32_t) event->arg0, (UpfEvent)event->type, &type);
         break;
     }
     default: {
