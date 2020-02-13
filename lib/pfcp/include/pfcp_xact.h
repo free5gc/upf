@@ -58,7 +58,7 @@ typedef enum {
     PFCP_XACT_FINAL_STAGE,
 } PfcpXactStage;
 
-Status PfcpXactInit(TimerList *timerList, uint32_t responseEvent, uint32_t holdingEvent);
+Status PfcpXactInit(TimerList *timerList, uintptr_t responseEvent, uintptr_t holdingEvent);
 Status PfcpXactTerminate(void);
 PfcpXact *PfcpXactLocalCreate(PfcpNode *gnode, PfcpHeader *header, Bufblk *bufBlk);
 PfcpXact *PfcpXactRemoteCreate(PfcpNode *gnode, uint32_t sqn);
