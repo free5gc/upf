@@ -31,21 +31,26 @@ Status _pushPdrToKernel(struct gtp5g_pdr *pdr, int action) {
     UTLT_Assert(pdr, return STATUS_ERROR, "push PDR not found");
     Status status;
 
+    Gtpv1TunDevNode *gtpv1Dev4 =
+      (Gtpv1TunDevNode*)ListFirst(&Self()->gtpv1DevList);
+    UTLT_Assert(gtpv1Dev4, return STATUS_ERROR, "No gtp device");
+    char *ifname = gtpv1Dev4->ifname;
+
     uint16_t pdrId = *(uint16_t*)gtp5g_pdr_get_id(pdr);
 
     switch (action) {
     case _PDR_ADD:
-        status = GtpTunnelAddPdr(gtp5g_int_name, pdr);
+        status = GtpTunnelAddPdr(ifname, pdr);
         UTLT_Assert(status == STATUS_OK, return STATUS_ERROR,
                     "Add PDR failed");
         break;
     case _PDR_MOD:
-        status = GtpTunnelModPdr(gtp5g_int_name, pdr);
+        status = GtpTunnelModPdr(ifname, pdr);
         UTLT_Assert(status == STATUS_OK, return STATUS_ERROR,
                     "Modify PDR failed");
         break;
     case _PDR_DEL:
-        status = GtpTunnelDelPdr(gtp5g_int_name, pdrId);
+        status = GtpTunnelDelPdr(ifname, pdrId);
         UTLT_Assert(status == STATUS_OK, return STATUS_ERROR,
                     "Delete PDR failed");
         break;
@@ -61,21 +66,26 @@ Status _pushFarToKernel(struct gtp5g_far *far, int action) {
     UTLT_Assert(far, return STATUS_ERROR, "push FAR not found");
     Status status;
 
+    Gtpv1TunDevNode *gtpv1Dev4 =
+      (Gtpv1TunDevNode*)ListFirst(&Self()->gtpv1DevList);
+    UTLT_Assert(gtpv1Dev4, return STATUS_ERROR, "No GTP Device");
+    char *ifname = gtpv1Dev4->ifname;
+
     uint32_t farId = *(uint32_t*)gtp5g_far_get_id(far);
 
     switch (action) {
     case _FAR_ADD:
-        status = GtpTunnelAddFar(gtp5g_int_name, far);
+        status = GtpTunnelAddFar(ifname, far);
         UTLT_Assert(status == STATUS_OK, return STATUS_ERROR,
                     "Add FAR failed");
         break;
     case _FAR_MOD:
-        status = GtpTunnelModFar(gtp5g_int_name, far);
+        status = GtpTunnelModFar(ifname, far);
         UTLT_Assert(status == STATUS_OK, return STATUS_ERROR,
                     "Modify FAR failed");
         break;
     case _FAR_DEL:
-        status = GtpTunnelDelFar(gtp5g_int_name, farId);
+        status = GtpTunnelDelFar(ifname, farId);
         UTLT_Assert(status == STATUS_OK, return STATUS_ERROR,
                     "Delete FAR failed");
         break;
@@ -233,7 +243,11 @@ Status UpfN4HandleUpdatePdr(UpdatePDR *updatePdr) {
 
     // Find PDR
     uint16_t pdrId = ntohs(*((uint16_t*)updatePdr->pDRID.value));
-    tmpPdr = GtpTunnelFindPdrById(gtp5g_int_name, pdrId);
+
+    Gtpv1TunDevNode *gtpv1Dev4 =
+      (Gtpv1TunDevNode*)ListFirst(&Self()->gtpv1DevList);
+    UTLT_Assert(gtpv1Dev4, return STATUS_ERROR, "No GTP Device");
+    tmpPdr = GtpTunnelFindPdrById(gtpv1Dev4->ifname, pdrId);
     UTLT_Assert(tmpPdr, return STATUS_ERROR,
                 "[PFCP] UpdatePDR PDR[%u] not found", pdrId);
 
@@ -294,7 +308,12 @@ Status UpfN4HandleUpdateFar(UpdateFAR *updateFar) {
 
     // Find FAR
     uint32_t farId = ntohl(*((uint32_t *)updateFar->fARID.value));
-    tmpFar = GtpTunnelFindFarById(gtp5g_int_name, farId);
+
+
+    Gtpv1TunDevNode *gtpv1Dev4 =
+      (Gtpv1TunDevNode*)ListFirst(&Self()->gtpv1DevList);
+    UTLT_Assert(gtpv1Dev4, return STATUS_ERROR, "No GTP Device");
+    tmpFar = GtpTunnelFindFarById(gtpv1Dev4->ifname, farId);
     UTLT_Assert(tmpFar, return STATUS_ERROR,
                 "[PFCP] UpdateFAR FAR[%u] not found", farId);
 
@@ -339,9 +358,13 @@ Status UpfN4HandleRemovePdr(UpfSession *session, uint16_t pdrId) {
     uint16_t *idPtr = ListFirst(&session->pdrIdList);
     while (idPtr) {
         if (*idPtr == pdrId) {
-            Status status = GtpTunnelDelPdr(gtp5g_int_name, pdrId);
+            Gtpv1TunDevNode *gtpv1Dev4 =
+              (Gtpv1TunDevNode*)ListFirst(&Self()->gtpv1DevList);
+            UTLT_Assert(gtpv1Dev4, return STATUS_ERROR, "No GTP Device");
+            Status status = GtpTunnelDelPdr(gtpv1Dev4->ifname, pdrId);
             UTLT_Assert(status == STATUS_OK, return STATUS_ERROR,
                         "PDR[%u] delete failed", pdrId);
+
             ListRemove(&session->pdrIdList, idPtr);
             return STATUS_OK;
         }
@@ -366,7 +389,11 @@ Status UpfN4HandleRemoveFar(uint32_t farId) {
     //UTLT_Assert(status == STATUS_OK, return STATUS_ERROR,
     //            "FAR delete error");
 
-    UpfFar *far = GtpTunnelFindFarById(gtp5g_int_name, farId);
+    Gtpv1TunDevNode *gtpv1Dev4 =
+      (Gtpv1TunDevNode*)ListFirst(&Self()->gtpv1DevList);
+    UTLT_Assert(gtpv1Dev4, return STATUS_ERROR, "No GTP Device");
+    char *gtpIfName = gtpv1Dev4->ifname;
+    UpfFar *far = GtpTunnelFindFarById(gtpIfName, farId);
     UTLT_Assert(far != NULL, return STATUS_ERROR,
                 "Cannot find FAR[%u] by FarId", farId);
 
@@ -374,7 +401,13 @@ Status UpfN4HandleRemoveFar(uint32_t farId) {
     int pdrNum = *(int*)gtp5g_far_get_related_pdr_num(far);
     uint16_t *pdrList = gtp5g_far_get_related_pdr_list(far);
     for (size_t idx = 0; idx < pdrNum; ++idx) {
-        gtp5g_pdr_set_far_id(pdrList[idx], 0);
+        UpfPdr * tmpPdr = GtpTunnelFindPdrById(gtpIfName, pdrList[idx]);
+        gtp5g_pdr_set_far_id(tmpPdr, 0);
+        _pushPdrToKernel(tmpPdr, _PDR_MOD);
+
+        gtp5g_pdr_free(tmpPdr);
+        UTLT_Assert(tmpPdr != NULL, continue,
+                    "Free pdr error");
     }
 
     Status status = _pushFarToKernel(far, _FAR_DEL);
@@ -382,7 +415,7 @@ Status UpfN4HandleRemoveFar(uint32_t farId) {
                 "FAR not pushed to kernel");
     gtp5g_far_free(far);
     UTLT_Assert(far != NULL, return STATUS_ERROR,
-                "Remove FAR error");
+                "Free FAR error");
 
     return STATUS_OK;
 }
@@ -561,8 +594,11 @@ Status UpfN4HandleSessionDeletionRequest(UpfSession *session,
     // TODO: Remove all PDR
     // TODO: Remove all FAR
     for (uint16_t *pdrId = ListFirst(&session->pdrIdList);
-         pdrId != NULL; pdrId = ListNext(pdrId)) {
-        status = GtpTunnelDelPdr(gtp5g_int_name, pdrId);
+        pdrId != NULL; pdrId = ListNext(pdrId)) {
+        Gtpv1TunDevNode *gtpv1Dev4 =
+          (Gtpv1TunDevNode*)ListFirst(&Self()->gtpv1DevList);
+        UTLT_Assert(gtpv1Dev4, return STATUS_ERROR, "No GTP Device");
+        status = GtpTunnelDelPdr(gtpv1Dev4->ifname, *pdrId);
         UTLT_Assert(status == STATUS_OK, return STATUS_ERROR,
                     "Remove PDR[%u] error", pdrId);
     }

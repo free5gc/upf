@@ -57,10 +57,10 @@ Status UpfContextInit() {
 
     // TODO : Add by self if context has been updated
     // TODO: check if gtp node need to init?
-    ListInit(&self.gtpv1DevList);
-    ListInit(&self.gtpv1v6DevList);
-    ListInit(&self.pfcpIPList);
-    ListInit(&self.pfcpIPv6List);
+    //ListInit(&self.gtpv1DevList);
+    //ListInit(&self.gtpv1v6DevList);
+    //ListInit(&self.pfcpIPList);
+    //ListInit(&self.pfcpIPv6List);
     ListInit(&self.ranS1uList);
     ListInit(&self.upfN4List);
     ListInit(&self.apnList);
@@ -274,7 +274,10 @@ Status UpfSessionRemove(UpfSession *session) {
 
     uint16_t *pdrId = ListFirst(&session->pdrIdList);
     while (pdrId) {
-        Status status = GtpTunnelDelPdr(gtp5g_int_name, *pdrId);
+        Gtpv1TunDevNode *gtpv1Dev4 =
+          (Gtpv1TunDevNode*)ListFirst(&Self()->gtpv1DevList);
+        UTLT_Assert(gtpv1Dev4, return STATUS_ERROR, "No GTP Device");
+        Status status = GtpTunnelDelPdr(gtpv1Dev4->ifname, *pdrId);
         UTLT_Assert(status == STATUS_OK, ,
                     "Remove PDR[%u] failed", *pdrId);
         // TODO: remove FAR of PDR if need

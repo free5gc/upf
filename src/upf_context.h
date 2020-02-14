@@ -46,6 +46,7 @@ typedef enum _UpfEvent {
 typedef struct {
     const char      *gtpDevNamePrefix;   // Default : "upfgtp"
 
+    ListNode        gtpInterfaceList;    // name of interface (char*)
     // Add context related to GTP-U here
     uint16_t        gtpv1Port;           // Default : GTP_V1_PORT
     int             gtpv1DevSN;          // Serial number for naming gtpv1Dev, gtpv1v6Dev
