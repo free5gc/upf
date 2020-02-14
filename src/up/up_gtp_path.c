@@ -201,7 +201,7 @@ Status GtpHandleTPDU(Sock *sock, Bufblk *data) {
     Gtpv1Header *gtpHdr = data->buf;
     int teid = ntohl(gtpHdr->_teid);
 
-    UpfSession *sess = UpfSessionFindByPdrTeid(teid);
+    UpfSession *sess = NULL;//UpfSessionFindByPdrTeid(teid);
     if (sess == NULL) {
         UTLT_Warning("The TEID[0x%x] does not match any session", teid);
         return STATUS_OK;
@@ -216,13 +216,14 @@ Status GtpHandleTPDU(Sock *sock, Bufblk *data) {
 }
 
 Status UpfSessionPacketSend(UpfSession *session, Sock *sock) {
+  return STATUS_OK;
     UTLT_Assert(session, return STATUS_ERROR, "UPF session is NULL");
     UTLT_Assert(sock, return STATUS_ERROR, "Socket is NULL");
 
-    UpfPdr *pdr = ListFirst(&session->dlPdrList);
+    UpfPdr *pdr = NULL;//ListFirst(&session->dlPdrList);
     UTLT_Assert(pdr, return STATUS_ERROR, "There is no PDR in this session");
 
-    uint32_t teid = pdr->upfGtpUTeid;
+    uint32_t teid = 0;//pdr->upfGtpUTeid;
     Gtpv1Header gtpv1Hdr = {
         .flags = 0x20,
         .type = GTPV1_T_PDU,
@@ -233,11 +234,12 @@ Status UpfSessionPacketSend(UpfSession *session, Sock *sock) {
     // Set RAN IP and Port
     sock->remoteAddr._family = sock->localAddr._family;
     sock->remoteAddr._port = sock->localAddr._port;    // Default : 2152
+    /*
     if (sock->localAddr._family == AF_INET)
         sock->remoteAddr.s4.sin_addr = pdr->far->ranIp.addr4;
     else
-        sock->remoteAddr.s6.sin6_addr = pdr->far->ranIp.addr6;
-
+        sock->remoteAddr.s6.sin6_addr = //pdr->far->ranIp.addr6;
+    */
     Bufblk *sendBuf = BufblkAlloc(1, 0x40);
     for (int i = 0; i < session->pktBufIdx; i++) {
         gtpv1Hdr._length = htons(session->packetBuffer[i]->len);
@@ -257,11 +259,12 @@ Status UpfSessionPacketSend(UpfSession *session, Sock *sock) {
 
 Status UpfSessionPacketRecv(UpfSession *session, Bufblk *pktBuf) {
     Status status = STATUS_OK;
+    return status;
 
     UTLT_Assert(session, return STATUS_ERROR, "UPF session is NULL");
     UTLT_Assert(pktBuf, return STATUS_ERROR, "Packet buffer is NULL");
 
-    UpfPdr *pdr = ListFirst(&session->dlPdrList);
+    UpfPdr *pdr = NULL;//ListFirst(&session->dlPdrList);
     // TODO : Find rule for UE packet
     /*
     for (; pdr; pdr = ListNext(pdr)) {
@@ -271,14 +274,16 @@ Status UpfSessionPacketRecv(UpfSession *session, Bufblk *pktBuf) {
     UTLT_Assert(pdr, return STATUS_ERROR, "There is no PDR in this session");
 
     pthread_mutex_lock(&session->bufLock);
+    /*
     if (session->pktBufIdx <= 0 && (pdr->far->applyAction & PFCP_FAR_APPLY_ACTION_NOCP)) {
         // Trigger DL data notification
         status = EventSend(Self()->eventQ, UPF_EVENT_SESSION_REPORT, 2, &session->upfSeid, &pdr->pdrId);
         UTLT_Assert(status == STATUS_OK, , "DL data message event send to N4 fail");
     }
+    */
 
     uint32_t pktBufIdx = (status != STATUS_OK ? session->pktBufIdx * -1 : session->pktBufIdx);
-    uint32_t teid = pdr->upfGtpUTeid;
+    uint32_t teid = 0;//pdr->upfGtpUTeid;
     UTLT_Assert(pktBufIdx < MAX_NUM_OF_PACKET_BUFFER_SIZE, return STATUS_ERROR,
                 "The buffer in this session is full : DL TEID[0x%x]", teid);
 
