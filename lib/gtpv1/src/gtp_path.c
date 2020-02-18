@@ -28,7 +28,6 @@ Status GtpServerFree(Sock *sock) {
     UTLT_Assert(SockUnregister(sock) == STATUS_OK, status |= STATUS_ERROR,
                 "GTP socket unregister fail");
 
-    status = UdpFree(sock);
     UTLT_Assert(UdpFree(sock) == STATUS_OK, status |= STATUS_ERROR,
                 "GTP socket free fail");
 
