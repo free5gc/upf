@@ -136,7 +136,7 @@ Sock *UdpClientCreate(int domain, const char *addr, int port);
 
 // Unix Socket (AF_UNIX)
 Sock *UnixSockCreate(int type);
-#define UnixFree(__sock) SockFree(__sock)
+Status UnixFree(Sock *sock);
 Status UnixSockSetAddr(SockAddr *sockAddr, const char *path);
 Sock *UnixServerCreate(int type, const char *path);
 #define UnixRecv(__sock, __buffer, __size) \

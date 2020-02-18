@@ -1,5 +1,7 @@
 #include "utlt_network.h"
 
+#include <unistd.h>
+
 #include "utlt_debug.h"
 
 Sock *UnixSockCreate(int type) {
@@ -7,6 +9,15 @@ Sock *UnixSockCreate(int type) {
     UTLT_Assert(sock, return NULL, "Unix Socket Create fail");
 
     return sock;
+}
+
+Status UnixFree(Sock *sock) {
+    if (strlen(sock->localAddr.su.sun_path))
+        unlink(sock->localAddr.su.sun_path);
+    
+    SockFree(sock);
+    
+    return STATUS_OK;
 }
 
 Status UnixSockSetAddr(SockAddr *sockAddr, const char *path) {
@@ -36,6 +47,6 @@ Sock *UnixServerCreate(int type, const char *path) {
     return sock;
 
 FREESOCK:
-    SockFree(sock);
+    UnixFree(sock);
     return NULL;
 }
