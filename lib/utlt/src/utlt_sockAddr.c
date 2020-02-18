@@ -4,6 +4,7 @@
 #include <sys/types.h>
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <sys/un.h>
 #include <netdb.h>
 #include <ifaddrs.h>
 #include <errno.h>
@@ -33,6 +34,10 @@ Status SockSetAddr(SockAddr *sockAddr, int domain, const char *addr, int port) {
             status = inet_pton(AF_INET6, addr, &(sockAddr->s6.sin6_addr));
             UTLT_Assert(status == 1, return STATUS_ERROR, "IPv6 %s translation error", addr);
             break;
+        case AF_UNIX:
+            UTLT_Assert(addr, return STATUS_ERROR, "NULL path in unix socket");
+            strcpy(sockAddr->su.sun_path, addr);
+            break;
         default:
             UTLT_Assert(0, return STATUS_ERROR, "Unknown family : %d", sockAddr->_family);
     }
@@ -48,6 +53,8 @@ int SockAddrLen(const void *sockAddr) {
             return sizeof(struct sockaddr_in);
         case AF_INET6:
             return sizeof(struct sockaddr_in6);
+        case AF_UNIX:
+            return sizeof(ptr->su.sun_family) + strlen(ptr->su.sun_path);
         default:
             UTLT_Assert(0, return 0, "Unknown family : %d", ptr->_family);
     }
