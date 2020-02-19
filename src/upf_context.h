@@ -24,13 +24,14 @@
 extern "C" {
 #endif /* __cplusplus */
 
-typedef struct _UpfUeIp     UpfUeIp;
-typedef struct _UpfDev      UpfDev;
-typedef struct gtp5g_pdr    UpfPdr;
-typedef struct gtp5g_far    UpfFar;
-typedef struct _UpfBar      UpfBar;
-typedef struct _UpfQer      UpfQer;
-typedef struct _UpfUrr      UpfUrr;
+typedef struct _UpfUeIp      UpfUeIp;
+typedef struct _UpfDev       UpfDev;
+typedef struct gtp5g_pdr     UpfPdr;
+typedef struct gtp5g_far     UpfFar;
+typedef struct _UpfBufPacket UpfBufPacket;
+typedef struct _UpfBar       UpfBar;
+typedef struct _UpfQer       UpfQer;
+typedef struct _UpfUrr       UpfUrr;
 
 typedef enum _UpfEvent {
 
@@ -64,6 +65,13 @@ typedef struct {
     SockAddr        *pfcpAddr;           // IPv4 Address
     SockAddr        *pfcpAddr6;          // IPv6 Address
 
+    /* Use Array or Hash for better performance
+     * Because max size of the list is 65536 due to the max of PDR ID
+     * We can use array for O(1) search instead of O(N) search in list
+     * Trade off of speed and memory size
+     */
+    //ListNode        bufPacketList;       // save pdrId and buffer here
+
     // DNS
 #define MAX_NUM_OF_DNS          2
     const char      *dns[MAX_NUM_OF_DNS];
@@ -75,8 +83,7 @@ typedef struct {
     ListNode        apnList;
 
     // Different list of policy rule
-    ListNode        pdrList;
-    ListNode        farList;
+    // TODO: if implementing QER in kernel, remove these list
     ListNode        qerList;
     ListNode        urrList;
 
@@ -90,6 +97,8 @@ typedef struct {
 
     // Session : hash(IMSI+APN)
     Hash            *sessionHash;
+    // Save buffer packet here
+    Hash            *bufPacketHash;
 
     // Config file
     const char      *configFilePath;
@@ -133,6 +142,18 @@ typedef struct _UpfSession {
     Bufblk          *packetBuffer[MAX_NUM_OF_PACKET_BUFFER_SIZE];
     pthread_mutex_t bufLock;
 } UpfSession;
+
+// Used for buffering, Index type for each PDR
+typedef struct _UpfBufPacket {
+    //ListNode        node;
+    int             index;
+
+    // If sessionPtr == NULL, this PDR don't exist
+    // TS 29.244 5.2.1 shows that PDR won't cross session
+    const UpfSession *sessionPtr;
+    uint16_t        pdrId;
+    Bufblk          *packetBuffer;
+} UpfBufPakcet;
 
 typedef struct _UpfUrr {
     ListNode        node;
@@ -180,6 +201,15 @@ Status UpfContextTerminate();
 ApnNode *UpfApnAdd(const char *apnName, const char *ip, const char *prefix, const char *natifname);
 Status UpfApnRemoveAll();
 
+// BufPacket
+HashIndex *UpfBufPacketFirst();
+HashIndex *UpfBufPacketNext(HashIndex *hashIdx);
+UpfBufPacket *UpfBufPacketThis(HashIndex *hashIdx);
+UpfBufPacket *UpfBufPacketFindByPdrId(uint16_t pdrId);
+UpfBufPacket *UpfBufPacketAdd(const UpfSession * const session,
+                              const uint16_t pdrId);
+Status UpfBufPacketRemove(UpfBufPacket *bufPacket);
+Status UpfBufPacketRemoveAll();
 // Session
 HashIndex *UpfSessionFirst();
 HashIndex *UpfSessionNext(HashIndex *hashIdx);

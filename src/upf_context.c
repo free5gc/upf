@@ -67,11 +67,16 @@ Status UpfContextInit() {
     ListInit(&self.qerList);
     ListInit(&self.urrList);
 
+    // Init buffer used UpfBufPacket
+    // Instead of list version, use hash function as below
+    //ListInit(&self.bufPacket); // UpfBufPacket
+
     self.recoveryTime = htonl(time((time_t *)NULL));
 
     // Set Default Value
     self.gtpDevNamePrefix = "upfgtp";
-    self.gtpv1Port = GTPV1_U_UDP_PORT; // defined in utlt_3gpptypes instead of GTP_V1_PORT defined in GTP_PATH;
+    // defined in utlt_3gpptypes instead of GTP_V1_PORT defined in GTP_PATH;
+    self.gtpv1Port = GTPV1_U_UDP_PORT;
     self.pfcpPort = PFCP_UDP_PORT;
     self.gtpv1DevSN = 0;
 
@@ -85,6 +90,7 @@ Status UpfContextInit() {
     TimerListInit(&self.timerServiceList);
 
     self.sessionHash = HashMake();
+    self.bufPacketHash = HashMake();
 
     upfContextInitialized = 1;
 
@@ -99,8 +105,10 @@ Status UpfContextTerminate() {
 
     UpfSessionRemoveAll();
 
-    UTLT_Assert(self.sessionHash, , "Hash Table missing?!");
+    UTLT_Assert(self.sessionHash, , "Session Hash Table missing?!");
     HashDestroy(self.sessionHash);
+    UTLT_Assert(self.bufPacketHash, , "Buffer Hash Table missing?!");
+    HashDestroy(self.bufPacketHash);
 
     // Terminate resource
     IndexTerminate(&upfBarPool);
@@ -117,11 +125,93 @@ Status UpfContextTerminate() {
     SockNodeListFree(&self.pfcpIPList);
     SockNodeListFree(&self.pfcpIPv6List);
 
+    UpfBufPacketRemoveAll();
     UpfApnRemoveAll();
 
     upfContextInitialized = 0;
 
     return status;
+}
+
+HashIndex *UpfBufPacketFirst() {
+    UTLT_Assert(self.bufPacketHash, return NULL, "");
+    return HashFirst(self.bufPacketHash);
+}
+
+HashIndex *UpfBufPacketNext(HashIndex *hashIdx) {
+    UTLT_Assert(hashIdx, return NULL, "");
+    return HashNext(hashIdx);
+}
+
+UpfBufPacket *UpfBufPacketThis(HashIndex *hashIdx) {
+    UTLT_Assert(hashIdx, return NULL, "");
+    return (UpfBufPacket *)HashThisKey(hashIdx);
+}
+
+UpfBufPacket *UpfBufPacketFindByPdrId(uint16_t pdrId) {
+    return (UpfBufPacket*)HashGet(self.bufPacketHash,
+                                  &pdrId, sizeof(uint16_t));
+}
+
+UpfBufPacket *UpfBufPacketAdd(const UpfSession * const session,
+                              const uint16_t pdrId) {
+    UTLT_Assert(session, return NULL, "No session");
+    UTLT_Assert(pdrId, return NULL, "PDR ID cannot be 0");
+
+    UpfBufPacket *newBufPacket = UTLT_Malloc(sizeof(UpfBufPacket));
+    newBufPacket->sessionPtr = session;
+    newBufPacket->pdrId = pdrId;
+    HashSet(self.bufPacketHash, &newBufPacket->pdrId,
+            sizeof(uint16_t), newBufPacket);
+
+    //ListAppend(&Self()->bufPacketList, newBufPacket);
+    return newBufPacket;
+}
+
+Status UpfBufPacketRemove(UpfBufPacket *bufPacket) {
+    UTLT_Assert(bufPacket, return STATUS_ERROR,
+                "Input bufPacket error");
+    Status status;
+
+    bufPacket->sessionPtr = NULL;
+    bufPacket->pdrId = 0;
+    if (bufPacket->packetBuffer) {
+        status = BufblkFree(bufPacket->packetBuffer);
+        UTLT_Assert(status == STATUS_OK, return STATUS_ERROR,
+                    "packet in bufPacket free error");
+    }
+
+    HashSet(self.bufPacketHash, &bufPacket->pdrId,
+            sizeof(uint16_t), NULL);
+    //ListRemove(&Self()->bufPacketList, bufPacket);
+    status = UTLT_Free(bufPacket);
+    UTLT_Assert(status == STATUS_OK, return STATUS_ERROR,
+                "bufPacket free error");
+
+    return STATUS_OK;
+}
+
+Status UpfBufPacketRemoveAll() {
+    HashIndex *hashIdx = NULL;
+    UpfBufPacket *bufPacket = NULL;
+
+    for (hashIdx = UpfBufPacketFirst(); hashIdx;
+         hashIdx = UpfBufPacketNext(hashIdx)) {
+        bufPacket = UpfBufPacketThis(hashIdx);
+        UpfBufPacketRemove(bufPacket);
+    }
+    /* List version
+    UpfBufPdr *node, *nextNode;
+
+    node = ListFirst(&self.bufPacketList);
+    while (node) {
+      nextNode = (UpfBufPacket *)ListNext(node);
+      UpfBufPacketRemove(node);
+      node = nextNode;
+    }
+    */
+
+    return STATUS_OK;
 }
 
 /**
