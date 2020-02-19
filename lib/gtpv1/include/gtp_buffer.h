@@ -14,7 +14,10 @@
 
 Sock *BufferServerCreate(int type, const char *path, SockHandler handler, void *data);
 Status BufferServerFree(Sock *sock);
-int BufferRecv(Sock *sock, Bufblk *pktbuf, uint16_t pdrId, uint8_t farAction);
 
+int BufferRecv(Sock *sock, Bufblk *pktbuf, uint16_t *pdrId, uint8_t *farAction);
+
+Status BufferEpollRegister(int epfd, Sock *sock);
+Status BufferEpollDeregister(int epfd, Sock *sock);
 
 #endif /* __GTP_BUFFER_H__ */

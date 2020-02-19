@@ -41,6 +41,9 @@ Sock *UnixServerCreate(int type, const char *path) {
     int opt = SO_REUSEADDR;
     SockSetOpt(sock, SOL_SOCKET, SO_REUSEADDR, &opt);
 
+    // Delete the pipe if it is existed
+    unlink(path);
+
     status = SockBind(sock, &sock->localAddr);
     UTLT_Assert(status == STATUS_OK, goto FREESOCK, "Unix SockBind fail");
 
