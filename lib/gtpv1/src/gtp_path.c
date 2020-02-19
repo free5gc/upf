@@ -76,7 +76,7 @@ int GtpRecv(Sock *sock, Bufblk *pktbuf) {
     UTLT_Assert(sock && pktbuf, return -1, "Socket or pktbuf pointer is NULL");
 
     if (pktbuf->size != MAX_OF_GTPV1_PACKET_SIZE) {
-        UTLT_Assert(BufblkResize(pktbuf, 1, MAX_OF_GTPV1_PACKET_SIZE),
+        UTLT_Assert(BufblkResize(pktbuf, 1, MAX_OF_GTPV1_PACKET_SIZE) == STATUS_OK,
                     return -1, "Buffer is not enough");
     }
 
