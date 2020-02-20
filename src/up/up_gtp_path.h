@@ -13,6 +13,7 @@ Status GTPv1ServerInit();
 Status GTPv1ServerTerminate();
 
 Status GtpHandler(Sock *sock, void *data);
+Status BufferHandler(Sock *sock, void *data);
 
 Status GtpHandleEchoRequest(Sock *sock, void *data);
 Status GtpHandleEchoResponse(void *data);
