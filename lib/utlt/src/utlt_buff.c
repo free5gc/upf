@@ -23,7 +23,7 @@
 #define MAX_NUM_OF_BUFBLK_POOL_32768 8
 #define MAX_NUM_OF_BUFBLK_POOL_65536 4
 
-#define SIZE_OF_BUF_RESERVED     3
+#define SIZE_OF_BUF_RESERVED     4
 #define SIZE_OF_BUF_64           64
 #define SIZE_OF_BUF_128          128
 #define SIZE_OF_BUF_256          256
