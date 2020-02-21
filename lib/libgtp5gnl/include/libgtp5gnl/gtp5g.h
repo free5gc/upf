@@ -28,6 +28,8 @@ void gtp5g_pdr_set_local_f_teid(struct gtp5g_pdr *pdr, uint32_t teid, struct in_
 
 /* Not in 3GPP spec, just used for routing */
 void gtp5g_pdr_set_role_addr_ipv4(struct gtp5g_pdr *pdr, struct in_addr *role_addr_ipv4);
+/* Not in 3GPP spec, just used for buffering */
+void gtp5g_pdr_set_unix_sock_path(struct gtp5g_pdr *pdr, const char *unix_sock_path);
 
 void gtp5g_pdr_set_sdf_fliter_description(struct gtp5g_pdr *pdr, const char *rule_str);
 void gtp5g_pdr_set_tos_traffic_class(struct gtp5g_pdr *pdr, uint16_t tos_traffic_class);

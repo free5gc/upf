@@ -7,6 +7,7 @@
 #include "knet_route.h"
 #include "gtp_header.h"
 #include "gtp_path.h"
+#include "gtp_buffer.h"
 #include "upf_context.h"
 
 Status GtpRouteInit() {
@@ -109,6 +110,24 @@ FREEBUFBLK:
     UTLT_Assert(BufblkFree(pktbuf) == STATUS_OK, , "Bufblk free fail");
 
     return status;
+}
+
+// TODO: Sample for buffer, must be modify
+Status BufferHandler(Sock *sock, void *data) {
+    UTLT_Assert(sock, return STATUS_ERROR, "Unix socket not found");
+    // Status status = STATUS_ERROR;
+
+    UTLT_Info("Enter BufferHandler");
+
+    uint8_t farAction;
+    uint16_t pdrId;
+    Bufblk *pktbuf = BufblkAlloc(1, MAX_OF_BUFFER_PACKET_SIZE);
+    int readNum = BufferRecv(sock, pktbuf, &pdrId, &farAction);
+    UTLT_Assert(readNum >= 0, goto FREEBUFBLK, "Buffer receive fail");
+
+FREEBUFBLK:
+    UTLT_Assert(BufblkFree(pktbuf) == STATUS_OK, , "Bufblk free fail");
+    return STATUS_OK;
 }
 
 Status GtpHandleEchoRequest(Sock *sock, void *data) {

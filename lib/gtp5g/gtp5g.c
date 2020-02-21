@@ -10,6 +10,7 @@
 #include <linux/file.h>
 #include <linux/gtp.h>
 #include <linux/range.h>
+#include <linux/un.h>
 
 #include <net/net_namespace.h>
 #include <net/protocol.h>
@@ -101,6 +102,10 @@ struct gtp5g_pdr {
 
     struct list_head      node_for_far;
 
+    // AF_UNIX socket for buffer
+    struct sockaddr_un addr_unix;
+    struct socket *sock_for_buf;
+
     u16     af;
     struct in_addr role_addr_ipv4;
     struct sock            *sk;
@@ -130,6 +135,94 @@ static unsigned int gtp5g_net_id __read_mostly;
 struct gtp5g_net {
     struct list_head gtp5g_dev_list;
 };
+
+static int unix_sock_send(struct gtp5g_pdr *pdr, void *buf, u32 len)
+{
+    struct msghdr msg;
+    struct iovec iov[2];
+    mm_segment_t oldfs;
+
+    int msg_iovlen = sizeof(iov) / sizeof(struct iovec);
+    int total_iov_len = 0;
+    int i, rt;
+    u16 self_hdr[2] = {pdr->id, pdr->far->action};
+
+    if (!pdr->sock_for_buf)
+        return -EINVAL;
+
+    memset(&msg, 0, sizeof(msg));
+    memset(iov, 0, sizeof(iov));
+
+    iov[0].iov_base = self_hdr;
+    iov[0].iov_len = sizeof(self_hdr);
+    iov[1].iov_base = buf;
+    iov[1].iov_len = len;
+
+    for (i = 0; i < msg_iovlen; i++)
+        total_iov_len += iov[i].iov_len;
+
+    msg.msg_name = 0;
+    msg.msg_namelen = 0;
+    iov_iter_init(&msg.msg_iter, WRITE, iov, msg_iovlen, total_iov_len);
+    msg.msg_control = NULL;
+    msg.msg_controllen = 0;
+    msg.msg_flags = 0;
+
+    oldfs = get_fs();
+    set_fs(KERNEL_DS);
+
+    rt = sock_sendmsg(pdr->sock_for_buf, &msg);
+
+    set_fs(oldfs);
+
+    return rt;
+}
+
+static void unix_sock_client_delete(struct gtp5g_pdr *pdr)
+{
+    if (pdr->sock_for_buf)
+        sock_release(pdr->sock_for_buf);
+    
+    pdr->sock_for_buf = NULL;
+}
+
+static int unix_sock_client_new(struct gtp5g_pdr *pdr)
+{
+    int rt;
+    struct socket **psock = &pdr->sock_for_buf;
+    struct sockaddr_un *addr = &pdr->addr_unix;
+
+    if (!strlen(addr->sun_path))
+        return -EINVAL;
+
+    rt = sock_create(AF_UNIX, SOCK_DGRAM, 0, psock);
+    if (rt) {
+        pr_err("Sock create fail\n");
+        return rt;
+    }
+
+    rt = (*psock)->ops->connect(*psock, (struct sockaddr *) addr,
+            sizeof(addr->sun_family) + strlen(addr->sun_path), 0);
+    if (rt) {
+        unix_sock_client_delete(pdr);
+        pr_err("Unix sock connect fail\n");
+        return rt;
+    }
+
+    return 0;
+}
+
+static int unix_sock_client_update(struct gtp5g_pdr *pdr)
+{
+    struct gtp5g_far *far = pdr->far;
+    
+    unix_sock_client_delete(pdr);
+    
+    if (far && (far->action & FAR_ACTION_BUFF))
+        return unix_sock_client_new(pdr);
+
+    return 0;
+}
 
 static u32 gtp5g_h_initval;
 
@@ -164,13 +257,21 @@ static int far_fill(struct gtp5g_far *far, struct gtp5g_dev *gtp, struct genl_in
     struct nlattr *hdr_creation_attrs[GTP5G_OUTER_HEADER_CREATION_ATTR_MAX + 1];
     struct outer_header_creation *hdr_creation;
 
+    // Update related PDR for buffering
+    struct gtp5g_pdr *pdr;
+
     if (!far)
         return -EINVAL;
 
     far->id = nla_get_u32(info->attrs[GTP5G_FAR_ID]);
 
-    if (info->attrs[GTP5G_FAR_APPLY_ACTION])
+    if (info->attrs[GTP5G_FAR_APPLY_ACTION]) {
         far->action = nla_get_u8(info->attrs[GTP5G_FAR_APPLY_ACTION]);
+
+        // Update related PDR for buffering
+        list_for_each_entry_rcu(pdr, &far->pdr_list, node_for_far)
+            unix_sock_client_update(pdr);
+    }
 
     if (info->attrs[GTP5G_FAR_FORWARDING_PARAMETER] &&
         !nla_parse_nested(fwd_param_attrs, GTP5G_FORWARDING_PARAMETER_ATTR_MAX, info->attrs[GTP5G_FAR_FORWARDING_PARAMETER], NULL, NULL)) {
@@ -250,6 +351,7 @@ static int pdr_fill(struct gtp5g_pdr *pdr, struct gtp5g_dev *gtp, struct genl_in
     struct ip_filter_rule *rule;
 
     int i;
+    char *str;
 
     if (!pdr)
         return -EINVAL;
@@ -270,6 +372,17 @@ static int pdr_fill(struct gtp5g_pdr *pdr, struct gtp5g_dev *gtp, struct genl_in
         *pdr->outer_header_removal = nla_get_u8(info->attrs[GTP5G_OUTER_HEADER_REMOVAL]);
     }
 
+    /* Not in 3GPP spec, just used for routing */
+    if (info->attrs[GTP5G_PDR_ROLE_ADDR_IPV4])
+        pdr->role_addr_ipv4.s_addr = nla_get_u32(info->attrs[GTP5G_PDR_ROLE_ADDR_IPV4]);
+
+    /* Not in 3GPP spec, just used for buffering */
+    if (info->attrs[GTP5G_PDR_UNIX_SOCKET_PATH]) {
+        str = nla_data(info->attrs[GTP5G_PDR_UNIX_SOCKET_PATH]);
+        pdr->addr_unix.sun_family = AF_UNIX;
+        strncpy(pdr->addr_unix.sun_path, str, nla_len(info->attrs[GTP5G_PDR_UNIX_SOCKET_PATH]));
+    }
+
     if (info->attrs[GTP5G_PDR_FAR_ID]) {
         u32 far_id = nla_get_u32(info->attrs[GTP5G_PDR_FAR_ID]);
         pdr->far = far_find_by_id(gtp, far_id);
@@ -280,9 +393,8 @@ static int pdr_fill(struct gtp5g_pdr *pdr, struct gtp5g_dev *gtp, struct genl_in
         list_add_rcu(&pdr->node_for_far, &pdr->far->pdr_list);
     }
 
-    /* Not in 3GPP spec, just used for routing */
-    if (info->attrs[GTP5G_PDR_ROLE_ADDR_IPV4])
-        pdr->role_addr_ipv4.s_addr = nla_get_u32(info->attrs[GTP5G_PDR_ROLE_ADDR_IPV4]);
+    if (unix_sock_client_update(pdr) < 0)
+        return -EINVAL;
 
     /* Parse PDI in PDR */
     if (info->attrs[GTP5G_PDR_PDI] &&
@@ -698,7 +810,20 @@ err:
     return -EBADMSG;
 }
 
-// TODO: Handle one action now, need to handle multiple action
+// 
+static int gtp5g_buf_skb_ipv4(struct sk_buff *skb, struct net_device *dev,
+                                struct gtp5g_pdr *pdr)
+{
+    int rt = 0;
+
+    // TODO: handle nonlinear part
+    if (unix_sock_send(pdr, skb->data, skb_headlen(skb)) < 0)
+        rt = -EBADMSG;
+    
+    dev_kfree_skb(skb);
+    return rt;
+}
+
 static int gtp5g_handle_skb_ipv4(struct sk_buff *skb, struct net_device *dev,
                                 struct gtp5g_pktinfo *pktinfo)
 {
@@ -726,24 +851,24 @@ static int gtp5g_handle_skb_ipv4(struct sk_buff *skb, struct net_device *dev,
 
     far = pdr->far;
     if (far) {
-        if (far->action & FAR_ACTION_DROP) {
-            return gtp5g_drop_skb_ipv4(skb, dev);
-        }
-        if (far->action & FAR_ACTION_FORW) {
-            return gtp5g_fwd_skb_ipv4(skb, dev, pktinfo, pdr);
-        }
-        if (far->action & FAR_ACTION_BUFF) {
-            // TODO: Need to send to user space
-        }
-        if (far->action & FAR_ACTION_NOCP) {
-            // TODO: Need to send to user space and notify CP
-        }
-        if (far->action & FAR_ACTION_DUPL) {
-            // TODO: implement
+        // One and only one of the DROP, FORW and BUFF flags shall be set to 1.
+        // The NOCP flag may only be set if the BUFF flag is set.
+        // The DUPL flag may be set with any of the DROP, FORW, BUFF and NOCP flags.
+        switch (far->action & FAR_ACTION_MASK) {
+            case FAR_ACTION_DROP:
+                return gtp5g_drop_skb_ipv4(skb, dev);
+            case FAR_ACTION_FORW:
+                return gtp5g_fwd_skb_ipv4(skb, dev, pktinfo, pdr);
+            case FAR_ACTION_BUFF:
+                // TODO: Need to send to user space
+                return gtp5g_buf_skb_ipv4(skb, dev, pdr);
+            default:
+                pr_err("Unspec apply action[%u] in FAR[%u] and related to PDR[%u]",
+                    far->action, far->id, pdr->id);
         }
     }
 
-    return 0;
+    return -ENOENT;
 }
 
 static void gtp5g_xmit_skb_ipv4(struct sk_buff *skb, struct gtp5g_pktinfo *pktinfo, u32 action)
@@ -851,6 +976,8 @@ static void pdr_context_free(struct rcu_head *head)
             kfree(sdf->bi_id);
         }
     }
+
+    unix_sock_client_delete(pdr);
 
     kfree(pdr);
 }
@@ -1209,58 +1336,117 @@ static struct gtp5g_pdr *pdr_find_by_gtp1u(struct gtp5g_dev *gtp, struct sk_buff
     return NULL;
 }
 
-static int gtp5g_rx(struct gtp5g_pdr *pdr, struct sk_buff *skb,
-                  unsigned int hdrlen, unsigned int role)
+static int gtp5g_drop_skb_encap(struct sk_buff *skb, struct net_device *dev)
 {
-    struct pcpu_sw_netstats *stats;
+    dev->stats.tx_dropped++;
+    dev_kfree_skb(skb);
+
+    return 0;
+}
+
+static int gtp5g_fwd_skb_encap(struct sk_buff *skb, struct net_device *dev,
+                                unsigned int hdrlen, struct gtp5g_pdr *pdr)
+{
+    struct gtp5g_far *far = pdr->far;
     struct gtp1_header *gtp1;
     struct iphdr *iph;
 	struct udphdr *uh;
 
+    struct pcpu_sw_netstats *stats;
+
+    if (far->fwd_param && far->fwd_param->hdr_creation) {
+		// Just modify the teid and packet dest ip
+		gtp1 = (struct gtp1_header *)(skb->data + sizeof(struct udphdr));
+		gtp1->tid = far->fwd_param->hdr_creation->teid;
+
+		skb_push(skb, 20);
+		iph = ip_hdr(skb);
+
+		if (!pdr->pdi->f_teid) {
+			pr_err("Unable to handle hdr removal + creation "
+				"due to pdr->pdi->f_teid not exist\n");
+			return -1;
+		}
+		
+		iph->saddr = pdr->pdi->f_teid->gtpu_addr_ipv4.s_addr;
+		iph->daddr = far->fwd_param->hdr_creation->peer_addr_ipv4.s_addr;
+		iph->check = 0;
+
+		uh = udp_hdr(skb);
+		uh->check = 0;
+
+		if (ip_xmit(skb, pdr->sk, dev) < 0) {
+			pr_err("ip_xmit error\n");
+			kfree_skb(skb);
+			return -1;
+		}
+
+        return 0;
+	}
+	else {
+		// Get rid of the GTP + UDP headers.
+		if (iptunnel_pull_header(skb, hdrlen, skb->protocol,
+								!net_eq(sock_net(pdr->sk), dev_net(dev))))
+			return -1;
+
+		/* Now that the UDP and the GTP header have been removed, set up the
+		 * new network header. This is required by the upper layer to
+		 * calculate the transport header.
+		 */
+		skb_reset_network_header(skb);
+	}
+
+    skb->dev = dev;
+
+    stats = this_cpu_ptr(skb->dev->tstats);
+    u64_stats_update_begin(&stats->syncp);
+    stats->rx_packets++;
+    stats->rx_bytes += skb->len;
+    u64_stats_update_end(&stats->syncp);
+
+    netif_rx(skb);
+
+    return 0;
+}
+
+// TODO: implement if need any feature
+static int gtp5g_buf_skb_encap(void)
+{
+    return 1;
+}
+
+static int gtp5g_rx(struct gtp5g_pdr *pdr, struct sk_buff *skb,
+                  unsigned int hdrlen, unsigned int role)
+{
+    int rt;
+    struct gtp5g_far *far = pdr->far;
+
+    if (!far) {
+        pr_err("There is no FAR related to PDR[%u]", pdr->id);
+        return -1;
+    }
+
     // TODO: not reading the value of outer_header_removal now,
-    //   just check if it is assigned.
+    // just check if it is assigned.
     if (pdr->outer_header_removal) {
-        if (pdr->far && pdr->far->fwd_param && pdr->far->fwd_param->hdr_creation) {
-            // Just modify the teid and packet dest ip
-            gtp1 = (struct gtp1_header *)(skb->data + sizeof(struct udphdr));
-            gtp1->tid = pdr->far->fwd_param->hdr_creation->teid;
-
-            skb_push(skb, 20);
-            iph = ip_hdr(skb);
-
-            if (!pdr->pdi->f_teid) {
-                pr_err("Unable to handle hdr removal + creation "
-                       "due to pdr->pdi->f_teid not exist\n");
-                return -1;
-            }
-            
-            iph->saddr = pdr->pdi->f_teid->gtpu_addr_ipv4.s_addr;
-            iph->daddr = pdr->far->fwd_param->hdr_creation->peer_addr_ipv4.s_addr;
-            iph->check = 0;
-
-            uh = udp_hdr(skb);
-            uh->check = 0;
-
-            if (ip_xmit(skb, pdr->sk, pdr->dev) < 0) {
-                pr_err("ip_xmit error\n");
-                kfree_skb(skb);
-                return -1;
-            }
-            else {
-                return 0;
-            }
-        }
-        else {
-            // Get rid of the GTP + UDP headers.
-            if (iptunnel_pull_header(skb, hdrlen, skb->protocol,
-                                    !net_eq(sock_net(pdr->sk), dev_net(pdr->dev))))
-                return -1;
-
-            /* Now that the UDP and the GTP header have been removed, set up the
-            * new network header. This is required by the upper layer to
-            * calculate the transport header.
-            */
-            skb_reset_network_header(skb);
+        // One and only one of the DROP, FORW and BUFF flags shall be set to 1.
+        // The NOCP flag may only be set if the BUFF flag is set.
+        // The DUPL flag may be set with any of the DROP, FORW, BUFF and NOCP flags.
+        switch(far->action & FAR_ACTION_MASK) {
+            case FAR_ACTION_DROP: 
+                rt = gtp5g_drop_skb_encap(skb, pdr->dev);
+                break;
+            case FAR_ACTION_FORW:
+                rt = gtp5g_fwd_skb_encap(skb, pdr->dev, hdrlen, pdr);
+                break;
+            case FAR_ACTION_BUFF:
+                // TODO: Need to send to user space
+                rt = gtp5g_buf_skb_encap();
+                break;
+            default:
+                pr_err("Unspec apply action[%u] in FAR[%u] and related to PDR[%u]",
+                    far->action, far->id, pdr->id);
+                rt = -1;
         }
     } else {
         // TODO: this action is not supported
@@ -1268,17 +1454,8 @@ static int gtp5g_rx(struct gtp5g_pdr *pdr, struct sk_buff *skb,
                "(which routed to the gtp interface and matches a PDR)");
         return -1;
     }
-
-    skb->dev = pdr->dev;
-
-    stats = this_cpu_ptr(pdr->dev->tstats);
-    u64_stats_update_begin(&stats->syncp);
-    stats->rx_packets++;
-    stats->rx_bytes += skb->len;
-    u64_stats_update_end(&stats->syncp);
-
-    netif_rx(skb);
-    return 0;
+    
+    return rt;
 }
 
 static int gtp1u_udp_encap_recv(struct gtp5g_dev *gtp, struct sk_buff *skb)

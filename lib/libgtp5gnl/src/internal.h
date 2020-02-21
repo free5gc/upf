@@ -87,6 +87,9 @@ struct gtp5g_pdr {
 
     /* Not in 3GPP spec, just used for routing */
     struct in_addr *role_addr_ipv4;
+
+    /* Not in 3GPP spec, just used for buffering */
+    char *unix_sock_path;
 };
 
 #endif
