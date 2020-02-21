@@ -62,6 +62,13 @@ static void add_usage(const char *name)
     printf("\t--sdf-id <id>\n");
     printf("\n");
 
+    printf("OTHER OPTION BUT NOT IEs");
+    printf("\t--gtpu-src-ip <gtpu-src-ip>\n");
+    printf("\t\tUsed for set the source IP in GTP forwarding packet");
+    printf("\t--buffer-usock-path <AF_UNIX-sock-path>\n");
+    printf("\t\tUsed for sending packet which should be buffered to user space");
+    printf("\n");
+
     printf("FAR OPTIONS\n");
     printf("\t--action <apply-action>\n");
     printf("\t--hdr-creation <description> <o-teid> <peer-ipv4> <peer-port>\n");
@@ -87,6 +94,8 @@ static struct option long_pdr_options[] =
 
     /* Not in 3GPP spec, just used for routing */
     {"gtpu-src-ip", required_argument, NULL, 'g'},
+    /* Not in 3GPP spec, just used for buffering */
+    {"buffer-usock-path", required_argument, NULL, 'b'},
 };
 
 static struct gtp5g_pdr *prepare_pdr(int argc, char *argv[])
@@ -146,6 +155,9 @@ static struct gtp5g_pdr *prepare_pdr(int argc, char *argv[])
                 if ((ret = inet_pton(AF_INET, optarg, &(sa.sin_addr))) != 1)
                     goto err;
                 gtp5g_pdr_set_role_addr_ipv4(pdr, &(sa.sin_addr));
+                break;
+            case 'b': // --buffer-usock-path
+                gtp5g_pdr_set_unix_sock_path(pdr, optarg);
                 break;
         }
     }

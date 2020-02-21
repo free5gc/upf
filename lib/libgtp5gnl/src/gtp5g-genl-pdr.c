@@ -62,6 +62,10 @@ static void gtp5g_build_pdr_payload(struct nlmsghdr *nlh, struct gtp5g_dev *dev,
     if (pdr->role_addr_ipv4)
         mnl_attr_put_u32(nlh, GTP5G_PDR_ROLE_ADDR_IPV4, pdr->role_addr_ipv4->s_addr);
 
+    /* Not in 3GPP spec, just used for buffering */
+    if (pdr->unix_sock_path)
+        mnl_attr_put_str(nlh, GTP5G_PDR_UNIX_SOCKET_PATH, pdr->unix_sock_path);
+
     // Level 2 PDR : PDI
     struct gtp5g_pdi *pdi = pdr->pdi;
     struct nlattr *pdi_nest, *f_teid_nest, *sdf_filter_nest, *sdf_desp_nest;
@@ -736,6 +740,7 @@ static int genl_gtp5g_attr_cb(const struct nlmsghdr *nlh, void *data)
     struct gtp5g_pdr *pdr;
     struct ip_filter_rule *rule;
     struct in_addr ipv4;
+    const char *pstr;
 
     mnl_attr_parse(nlh, sizeof(*genl), genl_gtp5g_pdr_validate_cb, pdr_tb);
     pdr = *(struct gtp5g_pdr **) data = gtp5g_pdr_alloc();
@@ -831,6 +836,12 @@ static int genl_gtp5g_attr_cb(const struct nlmsghdr *nlh, void *data)
     if (pdr_tb[GTP5G_PDR_ROLE_ADDR_IPV4]) {
         ipv4.s_addr = mnl_attr_get_u32(pdr_tb[GTP5G_PDR_ROLE_ADDR_IPV4]);
         gtp5g_pdr_set_role_addr_ipv4(pdr, &ipv4);
+    }
+
+    /* Not in 3GPP spec, just used for buffering */
+    if (pdr_tb[GTP5G_PDR_UNIX_SOCKET_PATH]) {
+        pstr = mnl_attr_get_str(pdr_tb[GTP5G_PDR_UNIX_SOCKET_PATH]);
+        gtp5g_pdr_set_unix_sock_path(pdr, pstr);
     }
 
     return MNL_CB_OK;

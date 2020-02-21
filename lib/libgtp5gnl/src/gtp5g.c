@@ -77,6 +77,18 @@ gtp5g_struct_alloc_no_exp(pdr_far_id, uint32_t);
 /* Not in 3GPP spec, just used for routing */
 gtp5g_struct_alloc_no_exp(role_addr_ipv4, struct in_addr);
 
+/* Not in 3GPP spec, just used for buffering */
+static inline char *gtp5g_unix_sock_path_alloc(void)
+{
+	char *unix_sock_path;
+
+	unix_sock_path = calloc(108, sizeof(char)); // sun_path[108]
+	if (!unix_sock_path)
+		return NULL;
+
+	return unix_sock_path;
+}
+
 gtp5g_struct_alloc_exp(far, struct gtp5g_far);
 gtp5g_struct_alloc_no_exp(forwarding_parameter, struct gtp5g_forwarding_parameter);
 
@@ -159,6 +171,9 @@ void gtp5g_pdr_free(struct gtp5g_pdr *pdr)
     if (pdr->role_addr_ipv4)
         free(pdr->role_addr_ipv4);
 
+    if (pdr->unix_sock_path)
+        free(pdr->unix_sock_path);
+
     free(pdr);
 }
 EXPORT_SYMBOL(gtp5g_pdr_free);
@@ -188,6 +203,13 @@ static inline void role_addr_ipv4_may_alloc(struct gtp5g_pdr *pdr)
 {
     if (!pdr->role_addr_ipv4)
         pdr->role_addr_ipv4 = gtp5g_role_addr_ipv4_alloc();
+}
+
+/* Not in 3GPP spec, just used for buffering */
+static inline void unix_sock_path_may_alloc(struct gtp5g_pdr *pdr)
+{
+    if (!pdr->unix_sock_path)
+        pdr->unix_sock_path = gtp5g_unix_sock_path_alloc();
 }
 
 static inline void pdi_may_alloc(struct gtp5g_pdr *pdr)
@@ -322,6 +344,14 @@ void gtp5g_pdr_set_role_addr_ipv4(struct gtp5g_pdr *pdr, struct in_addr *role_ad
     memcpy(pdr->role_addr_ipv4, role_addr_ipv4, sizeof(struct in_addr));
 }
 EXPORT_SYMBOL(gtp5g_pdr_set_role_addr_ipv4);
+
+/* Not in 3GPP spec, just used for buffering */
+void gtp5g_pdr_set_unix_sock_path(struct gtp5g_pdr *pdr, const char *unix_sock_path)
+{
+    unix_sock_path_may_alloc(pdr);
+    strcpy(pdr->unix_sock_path, unix_sock_path);
+}
+EXPORT_SYMBOL(gtp5g_pdr_set_unix_sock_path);
 
 void gtp5g_pdr_set_ue_addr_ipv4(struct gtp5g_pdr *pdr, struct in_addr *ue_addr_ipv4)
 {

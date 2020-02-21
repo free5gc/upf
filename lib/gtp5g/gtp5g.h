@@ -76,6 +76,9 @@ enum gtp5g_pdr_attrs {
     /* Not in 3GPP spec, just used for routing */
     GTP5G_PDR_ROLE_ADDR_IPV4,
 
+    /* Not in 3GPP spec, just used for buffering */
+    GTP5G_PDR_UNIX_SOCKET_PATH,
+
     __GTP5G_PDR_ATTR_MAX,
 };
 #define GTP5G_PDR_ATTR_MAX (__GTP5G_PDR_ATTR_MAX - 1)
@@ -145,6 +148,7 @@ enum gtp5g_far_attrs {
 #define FAR_ACTION_DROP   0x01
 #define FAR_ACTION_FORW   0x02
 #define FAR_ACTION_BUFF   0x04
+#define FAR_ACTION_MASK   0x07
 #define FAR_ACTION_NOCP   0x08
 #define FAR_ACTION_DUPL   0x10
 
