@@ -557,15 +557,6 @@ Status UpfN4HandleSessionModificationRequest(
                     "Modification: Update PDR error");
     }
 
-    /* Remove FAR */
-    if (request->removeFAR.presence) {
-        UTLT_Assert(request->removeFAR.fARID.presence == 1, ,
-                    "[PFCP] FarId in removeFAR not presence");
-        status = UpfN4HandleRemoveFar(
-                   *(uint32_t*)request->removeFAR.fARID.value);
-        UTLT_Assert(status == STATUS_OK, return STATUS_ERROR,
-                    "Modification: Remove FAR error");
-    }
     /* Remove PDR */
     if (request->removePDR.presence) {
         UTLT_Assert(request->removePDR.pDRID.presence == 1, ,
@@ -574,6 +565,15 @@ Status UpfN4HandleSessionModificationRequest(
                    *(uint16_t*)request->removePDR.pDRID.value);
         UTLT_Assert(status == STATUS_OK, return STATUS_ERROR,
                     "Modification: Remove PDR error");
+    }
+    /* Remove FAR */
+    if (request->removeFAR.presence) {
+        UTLT_Assert(request->removeFAR.fARID.presence == 1, ,
+                    "[PFCP] FarId in removeFAR not presence");
+        status = UpfN4HandleRemoveFar(
+                   *(uint32_t*)request->removeFAR.fARID.value);
+        UTLT_Assert(status == STATUS_OK, return STATUS_ERROR,
+                    "Modification: Remove FAR error");
     }
 
     /* Send Session Modification Response */
@@ -615,22 +615,28 @@ Status UpfN4HandleSessionDeletionRequest(UpfSession *session,
 
     UTLT_Assert(gtpv1Dev4, return STATUS_ERROR, "No GTP Device");
     uint16_t *pdrIdPtr, pdrId;
+    // Always get first one because the first one before have been deleted
     for (pdrIdPtr = ListFirst(&session->pdrIdList), pdrId = *pdrIdPtr;
-         pdrIdPtr; pdrIdPtr = ListNext(pdrIdPtr)) {
-        // Remove FAR first
+         pdrIdPtr;
+         pdrIdPtr = ListNext(&session->pdrIdList), pdrId = *pdrIdPtr) {
+        // Remove PDR before far, but save farId first
         UpfPdr *tmpPdr = GtpTunnelFindPdrById(ifname, pdrId);
         uint32_t farId = *gtp5g_pdr_get_far_id(tmpPdr);
-        status = GtpTunnelDelFar(ifname, farId);
-        if (status != STATUS_OK) {
-            // status not important
-            UTLT_Debug("Remove FAR[%u] error, "
-                       "but it may be n PDR point to same FAR",
-                       farId);
-        }
 
         status = GtpTunnelDelPdr(gtpv1Dev4->ifname, pdrId);
         UTLT_Assert(status == STATUS_OK, return STATUS_ERROR,
                     "Remove PDR[%u] error", pdrId);
+        gtp5g_pdr_free(tmpPdr);
+
+        // Remove FAR
+        status = GtpTunnelDelFar(ifname, farId);
+        if (status != STATUS_OK) {
+          // status not important
+          UTLT_Debug("Remove FAR[%u] error, "
+                     "but it may be n PDR point to same FAR",
+                     farId);
+        }
+
     }
 
     /* delete session */
