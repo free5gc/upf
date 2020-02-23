@@ -182,6 +182,7 @@ Status UpfN4HandleCreatePdr(UpfSession *session, CreatePDR *createPdr) {
 }
 
 Status UpfN4HandleCreateFar(CreateFAR *createFar) {
+    UTLT_Debug("Handle Create FAR");
     UpfFar *tmpFar = NULL;
     UTLT_Assert(createFar->fARID.presence, return STATUS_ERROR,
                 "Far ID not presence");
@@ -194,6 +195,7 @@ Status UpfN4HandleCreateFar(CreateFAR *createFar) {
 
     // FarId
     uint32_t farId = ntohl(*((uint32_t *)createFar->fARID.value));
+    UTLT_Debug("FAR ID: %u", farId);
     gtp5g_far_set_id(tmpFar, farId);
 
     // Apply Action

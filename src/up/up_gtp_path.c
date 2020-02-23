@@ -20,7 +20,7 @@ Status GtpRouteInit() {
         status = KnetAddRoute(gtpTunDev->ifname, it->subnetIP, it->subnetPrefix, NULL, 0);
         UTLT_Assert(status == STATUS_OK, return STATUS_ERROR, "");
     }
-    
+
     // Get routes from main IPv4 routing table and print
     ListNode *routeEntries = KnetGetRoutes(AF_INET, RT_TABLE_MAIN);
     UTLT_Assert(routeEntries, return STATUS_ERROR, "");

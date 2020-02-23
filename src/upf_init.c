@@ -22,7 +22,7 @@
 
 // TODO: Sample for buffer, must be modify
 static Sock *sockForBufferTest;
-#define PATH_FOR_BUFFER "/tmp/unixsock"
+#define PATH_FOR_BUFFER "/tmp/free5gc_unix_sock"
 
 static Status SignalRegister();
 static void SignalHandler(int sigval);

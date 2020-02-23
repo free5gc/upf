@@ -33,6 +33,7 @@ add_custom_command(OUTPUT ${BUILD_CONFIG_DIR}
 add_custom_target(configs ALL DEPENDS ${BUILD_CONFIG_DIR} VERBATIM)
 
 add_compile_options(-Wall -Werror -Wno-address-of-packed-member)
+set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -g3 -O0")
 
 # Submodules
 add_subdirectory(src)
