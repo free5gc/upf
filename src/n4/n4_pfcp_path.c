@@ -59,7 +59,20 @@ static int _pfcpReceiveCB(Sock *sock, void *data) {
             // TODO: check noIpv4, noIpv6, preferIpv4, originally from context.no_ipv4
             upf = PfcpAddNodeWithSeid(&Self()->upfN4List, &fSeid,
                     Self()->pfcpPort, 0, 1, 0);
-            UTLT_Assert(upf, BufblkFree(bufBlk); return STATUS_ERROR, "");
+            if (!upf) {
+                // if upf == NULL (allocate error)
+                // Count size of upfN4List
+                int numOfUpf = 0;
+                PfcpNode *n4Node = ListFirst(&Self()->upfN4List);
+                while (n4Node) {
+                    ++numOfUpf;
+                    n4Node = (PfcpNode *)ListNext(n4Node);
+                }
+                UTLT_Error("PFCP Node allocate error, "
+                            "there may be too many SMF: %d", numOfUpf);
+                BufblkFree(bufBlk);
+                return STATUS_ERROR;
+            }
 
             upf->sock = Self()->pfcpSock;
         }
