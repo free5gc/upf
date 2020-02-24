@@ -26,6 +26,9 @@ static int _pfcpReceiveCB(Sock *sock, void *data) {
         return -1;
     }
 
+    UTLT_Assert(from._family == AF_INET, return -1,
+                "Support IPv4 only now");
+
     pfcpHeader = (PfcpHeader *)bufBlk->buf;
 
     if (pfcpHeader->version > PFCP_VERSION) {
@@ -37,7 +40,8 @@ static int _pfcpReceiveCB(Sock *sock, void *data) {
         pfcpOut->type = PFCP_VERSION_NOT_SUPPORTED_RESPONSE;
         pfcpOut->length = htons(4);
         pfcpOut->sqn_only = pfcpHeader->sqn_only;
-        SockSendTo(sock, vFail, 8); // TODO: must check localAddress / remoteAddress / fd is correct?
+        // TODO: must check localAddress / remoteAddress / fd is correct?
+        SockSendTo(sock, vFail, 8);
         BufblkFree(bufBlk);
         return STATUS_ERROR;
     }
@@ -51,8 +55,10 @@ static int _pfcpReceiveCB(Sock *sock, void *data) {
             fSeid.v4 = 1;
             //fSeid.seid = 0; // TOOD: check SEID value
             fSeid.addr4 = from.s4.sin_addr;
+
+            // TODO: check noIpv4, noIpv6, preferIpv4, originally from context.no_ipv4
             upf = PfcpAddNodeWithSeid(&Self()->upfN4List, &fSeid,
-                    Self()->pfcpPort, 0, 1, 0); // TODO: check noIpv4, noIpv6, preferIpv4, originally from context.no_ipv4
+                    Self()->pfcpPort, 0, 1, 0);
             UTLT_Assert(upf, BufblkFree(bufBlk); return STATUS_ERROR, "");
 
             upf->sock = Self()->pfcpSock;
