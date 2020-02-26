@@ -77,12 +77,12 @@ int BufIsNotEnough(Bufblk *bufblk, uint32_t num, uint32_t size);
             UTLT_Assert((__bufblk)->buf, (__bufblk)->size = (__bufblk)->len = 0; return STATUS_ERROR, "bufPool"#__sizeNum" is empty"); \
             (__bufblk)->size = __sizeNum; \
             (__bufblk)->len = 0; \
-            /* UTLT_Warning("Memory Alloc Size["#__sizeNum"]");*/ \
+            UTLT_Trace("Buffer Alloc Size["#__sizeNum"]"); \
             break; \
         case BUF_FREE : \
             PoolFree(&bufPool##__sizeNum, (bufPool##__sizeNum##_t *)(__bufblk)->buf); \
             (__bufblk)->size = (__bufblk)->len = 0; \
-            /* UTLT_Warning("Memory Free Size["#__sizeNum"]");*/ \
+            UTLT_Trace("Buffer Free Size["#__sizeNum"]"); \
             break; \
         default : \
             (__bufblk)->size = (__bufblk)->len = 0; \
