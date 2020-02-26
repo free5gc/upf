@@ -1,6 +1,7 @@
 #ifndef __INDEX_H__
 #define __INDEX_H__
 
+#include <string.h>
 #include <pthread.h>
 
 #include "utlt_debug.h"
@@ -45,6 +46,7 @@
     pthread_mutex_lock(&(__nameptr)->lock); \
     if (IndexSize(__nameptr) > 0) { \
         (__assignedPtr) = (__nameptr)->queueAvail[(__nameptr)->qFront]; \
+        memset((__assignedPtr), 0, sizeof(*((__nameptr)->queueAvail[(__nameptr)->qFront]))); \
         (__assignedPtr)->index = (__nameptr)->arrayForIndex[(__nameptr)->qFront]; \
         (__nameptr)->qFront = ((__nameptr)->qFront + 1) % ((__nameptr)->qCap + 1); \
         UTLT_Debug("Index alloc successful, total capacity[%d], available[%d]" \
