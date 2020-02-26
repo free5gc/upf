@@ -159,8 +159,10 @@ UpfBufPacket *UpfBufPacketAdd(const UpfSession * const session,
     UTLT_Assert(pdrId, return NULL, "PDR ID cannot be 0");
 
     UpfBufPacket *newBufPacket = UTLT_Malloc(sizeof(UpfBufPacket));
+    UTLT_Assert(newBufPacket, return NULL, "Allocate new slot error");
     newBufPacket->sessionPtr = session;
     newBufPacket->pdrId = pdrId;
+
     HashSet(self.bufPacketHash, &newBufPacket->pdrId,
             sizeof(uint16_t), newBufPacket);
 

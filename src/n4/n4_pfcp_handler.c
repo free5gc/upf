@@ -26,6 +26,9 @@
 #define _FAR_MOD 1
 #define _FAR_DEL 2
 
+#define _addr4ToStr(addrPtr, ipStr) \
+    char ipStr[INET_ADDRSTRLEN]; \
+    inet_ntop(AF_INET, addrPtr, ipStr, INET_ADDRSTRLEN);
 
 Status _pushPdrToKernel(struct gtp5g_pdr *pdr, int action) {
     UTLT_Assert(pdr, return STATUS_ERROR, "push PDR not found");
@@ -38,18 +41,46 @@ Status _pushPdrToKernel(struct gtp5g_pdr *pdr, int action) {
 
     uint16_t pdrId = *(uint16_t*)gtp5g_pdr_get_id(pdr);
 
+    if (gtp5g_pdr_get_precedence(pdr)) {
+        UTLT_Debug("precendence: %u", *gtp5g_pdr_get_precedence(pdr));
+    }
+    if (gtp5g_pdr_get_far_id(pdr)) {
+	UTLT_Debug("farId: %u", *gtp5g_pdr_get_far_id(pdr));
+    }
+    if (gtp5g_pdr_get_outer_header_removal(pdr)) {
+	UTLT_Debug("outer header removal: %u",
+	           *gtp5g_pdr_get_outer_header_removal(pdr));
+    }
+    if (gtp5g_pdr_get_ue_addr_ipv4(pdr)) {
+	_addr4ToStr(gtp5g_pdr_get_ue_addr_ipv4(pdr), ipStr);
+        UTLT_Debug("ue ip: %s", ipStr);
+    }
+    if (gtp5g_pdr_get_local_f_teid_teid(pdr)) {
+	UTLT_Debug("teid: %u", *gtp5g_pdr_get_local_f_teid_teid(pdr));
+    }
+    if (gtp5g_pdr_get_local_f_teid_gtpu_addr_ipv4(pdr)) {
+	_addr4ToStr(gtp5g_pdr_get_local_f_teid_gtpu_addr_ipv4(pdr), ipStr);
+        UTLT_Debug("gtpu ip: %s", ipStr);
+    }
+
     switch (action) {
     case _PDR_ADD:
+        UTLT_Debug("PDR add to kernel, dev: %s, pdrid: %u",
+		   ifname, *gtp5g_pdr_get_id(pdr));
         status = GtpTunnelAddPdr(ifname, pdr);
         UTLT_Assert(status == STATUS_OK, return STATUS_ERROR,
                     "Add PDR failed");
         break;
     case _PDR_MOD:
+        UTLT_Debug("PDR modify to kernel, dev: %s, pdrid: %u",
+		   ifname, *gtp5g_pdr_get_id(pdr));
         status = GtpTunnelModPdr(ifname, pdr);
         UTLT_Assert(status == STATUS_OK, return STATUS_ERROR,
                     "Modify PDR failed");
         break;
     case _PDR_DEL:
+        UTLT_Debug("PDR delete to kernel, dev: %s, pdrid: %u",
+		   ifname, *gtp5g_pdr_get_id(pdr));
         status = GtpTunnelDelPdr(ifname, pdrId);
         UTLT_Assert(status == STATUS_OK, return STATUS_ERROR,
                     "Delete PDR failed");
@@ -73,18 +104,39 @@ Status _pushFarToKernel(struct gtp5g_far *far, int action) {
 
     uint32_t farId = *(uint32_t*)gtp5g_far_get_id(far);
 
+    if (gtp5g_far_get_apply_action(far)) {
+        UTLT_Debug("apply action: %u", *gtp5g_far_get_apply_action(far));
+    }
+    if (gtp5g_far_get_outer_header_creation_description(far)) {
+        UTLT_Debug("description: %u",
+		   *gtp5g_far_get_outer_header_creation_description(far));
+    }
+    if (gtp5g_far_get_outer_header_creation_peer_addr_ipv4(far)) {
+        _addr4ToStr(
+	  gtp5g_far_get_outer_header_creation_peer_addr_ipv4(far), ipStr);
+	UTLT_Debug("peer ipv4: %s", ipStr);
+    }
+    if (gtp5g_far_get_outer_header_creation_port(far)) {
+        UTLT_Debug("port: %u", *gtp5g_far_get_outer_header_creation_port(far));
+    }
     switch (action) {
     case _FAR_ADD:
+        UTLT_Debug("FAR add to kernel, dev: %s, far id: %u",
+		   ifname, *gtp5g_far_get_id(far));
         status = GtpTunnelAddFar(ifname, far);
         UTLT_Assert(status == STATUS_OK, return STATUS_ERROR,
                     "Add FAR failed");
         break;
     case _FAR_MOD:
+        UTLT_Debug("FAR modify to kernel, dev: %s, far id: %u",
+		   ifname, *gtp5g_far_get_id(far));
         status = GtpTunnelModFar(ifname, far);
         UTLT_Assert(status == STATUS_OK, return STATUS_ERROR,
                     "Modify FAR failed");
         break;
     case _FAR_DEL:
+        UTLT_Debug("FAR delete to kernel, dev: %s, far id: %u",
+		   ifname, *gtp5g_far_get_id(far));
         status = GtpTunnelDelFar(ifname, farId);
         UTLT_Assert(status == STATUS_OK, return STATUS_ERROR,
                     "Delete FAR failed");
@@ -98,6 +150,7 @@ Status _pushFarToKernel(struct gtp5g_far *far, int action) {
 }
 
 Status UpfN4HandleCreatePdr(UpfSession *session, CreatePDR *createPdr) {
+    UTLT_Debug("Handle Create PDR");
     UpfPdr *tmpPdr = NULL;
 
     UTLT_Assert(createPdr->pDRID.presence, return STATUS_ERROR,
@@ -161,7 +214,7 @@ Status UpfN4HandleCreatePdr(UpfSession *session, CreatePDR *createPdr) {
 
     // FAR ID
     if (createPdr->fARID.presence) {
-        uint32_t farId = ntohl(*((uint8_t *)createPdr->fARID.value));
+        uint32_t farId = ntohl(*((uint32_t *)createPdr->fARID.value));
         gtp5g_pdr_set_far_id(tmpPdr, farId);
     }
 
@@ -174,7 +227,9 @@ Status UpfN4HandleCreatePdr(UpfSession *session, CreatePDR *createPdr) {
                 "Free PDR struct error");
 
     // Set session point to pdr
-    ListAppend(&session->pdrIdList, &pdrId);
+    uint16_t *pdrIdPtr = UTLT_Malloc(sizeof(uint16_t));
+    memcpy(pdrIdPtr, &pdrId, sizeof(uint16_t));
+    ListAppend(&session->pdrIdList, pdrIdPtr);
     // Set buff relate pdr to session
     UpfBufPacketAdd(session, pdrId);
 
@@ -243,6 +298,7 @@ Status UpfN4HandleCreateFar(CreateFAR *createFar) {
 }
 
 Status UpfN4HandleUpdatePdr(UpdatePDR *updatePdr) {
+    UTLT_Debug("Handle Update PDR");
     UpfPdr *tmpPdr = NULL;
     UTLT_Assert(updatePdr->pDRID.presence == 1,
                 return STATUS_ERROR, "updatePDR no pdrId");
@@ -308,6 +364,7 @@ Status UpfN4HandleUpdatePdr(UpdatePDR *updatePdr) {
 }
 
 Status UpfN4HandleUpdateFar(UpdateFAR *updateFar) {
+    UTLT_Debug("Handle Update FAR");
     UpfFar *tmpFar = NULL;
     UTLT_Assert(updateFar->fARID.presence,
                 return STATUS_ERROR, "Far ID not presence");
@@ -357,6 +414,7 @@ Status UpfN4HandleUpdateFar(UpdateFAR *updateFar) {
 }
 
 Status UpfN4HandleRemovePdr(UpfSession *session, uint16_t pdrId) {
+    UTLT_Debug("Handle Remove PDR");
     UTLT_Assert(pdrId, return STATUS_ERROR, "pdrId cannot be 0");
     UTLT_Assert(session, return STATUS_ERROR,
                 "session not found");
@@ -388,6 +446,7 @@ Status UpfN4HandleRemovePdr(UpfSession *session, uint16_t pdrId) {
 }
 
 Status UpfN4HandleRemoveFar(uint32_t farId) {
+    UTLT_Debug("Handle Remove FAR");
     UTLT_Assert(farId, return STATUS_ERROR,
                 "farId should not be 0");
 
@@ -750,8 +809,52 @@ Status UpfN4HandleAssociationUpdateRequest(
 
 Status UpfN4HandleAssociationReleaseRequest(
          PfcpXact *xact, PFCPAssociationReleaseRequest *request) {
-    // TODO
-    UTLT_Info("[PFCP] TODO Association Release Request");
+    PfcpNodeId *nodeId;
+
+    UTLT_Assert(xact, return STATUS_ERROR, "xact error");
+    UTLT_Assert(xact->gnode, return STATUS_ERROR,
+		"gNode of xact error");
+    UTLT_Assert(request->nodeID.presence, return STATUS_ERROR,
+		"Request missing nodeId");
+
+    nodeId = (PfcpNodeId *)request->nodeId.value;
+
+    // Clear all session releated to this node
+    HashIndex *sessionHashIdx = NULL;
+    UpfSession *session = NULL;
+
+    for (sessionHashIdx = UpfSessionFirst(); sessionHashIdx;
+	 sessionHashIdx = UpfSessionNext(sessionHashIdx)) {
+        session = UpfSessionThis(sessionHashIdx);
+	// Clear transaction node
+	if (session->pfcpNode == xact->gnode) {
+	    UpfSessionRemove(session);
+	}
+    }
+    // TODO: Check if I need to remove gnode in transaction
+
+    // Build Response
+    Status status;
+    PfcpHeader header;
+    Bufblk *bufBlk = NULL;
+
+    memset(&header, 0, sizeof(PfcpHeader));
+    header.type = PFCP_ASSOCIATION_RELEASE_RESPONSE;
+    header.seid = 0;
+
+    status = UpfN4BuildAssociationReleaseResponse(&bufBlk, header.type);
+    UTLT_Assert(status == STATUS_OK, return STATUS_ERROR,
+		"N4 build error");
+
+    status = PfcpXactUpdateTx(xact, &header, bufBlk);
+    UTLT_Assert(status == STATUS_OK, return STATUS_ERROR,
+		"PfcpXactUpdateTx error");
+
+    status = PfcpXactCommit(xact);
+    UTLT_Assert(status == STATUS_OK, return STATUS_ERROR,
+		"xact commit error");
+
+    UTLT_Info("[PFCP] Association Release Request");
     return STATUS_OK;
 }
 
