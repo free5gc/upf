@@ -809,15 +809,11 @@ Status UpfN4HandleAssociationUpdateRequest(
 
 Status UpfN4HandleAssociationReleaseRequest(
          PfcpXact *xact, PFCPAssociationReleaseRequest *request) {
-    PfcpNodeId *nodeId;
-
     UTLT_Assert(xact, return STATUS_ERROR, "xact error");
     UTLT_Assert(xact->gnode, return STATUS_ERROR,
 		"gNode of xact error");
     UTLT_Assert(request->nodeID.presence, return STATUS_ERROR,
 		"Request missing nodeId");
-
-    nodeId = (PfcpNodeId *)request->nodeId.value;
 
     // Clear all session releated to this node
     HashIndex *sessionHashIdx = NULL;
