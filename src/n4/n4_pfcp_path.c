@@ -51,8 +51,9 @@ static int _pfcpReceiveCB(Sock *sock, void *data) {
             fSeid.v4 = 1;
             //fSeid.seid = 0; // TOOD: check SEID value
             fSeid.addr4 = from.s4.sin_addr;
+            // TODO: check noIpv4, noIpv6, preferIpv4, originally from context.no_ipv4
             upf = PfcpAddNodeWithSeid(&Self()->upfN4List, &fSeid,
-                    Self()->pfcpPort, 0, 1, 0); // TODO: check noIpv4, noIpv6, preferIpv4, originally from context.no_ipv4
+                                      Self()->pfcpPort, 0, 1, 0);
             UTLT_Assert(upf, BufblkFree(bufBlk); return STATUS_ERROR, "");
 
             upf->sock = Self()->pfcpSock;
@@ -88,9 +89,11 @@ Status PfcpServerInit() {
     Status status;
 
     status = PfcpServerList(&Self()->pfcpIPList, _pfcpReceiveCB, Self()->epfd);
-    UTLT_Assert(status == STATUS_OK, return STATUS_ERROR, "Create PFCP Server for IPv4 error");
+    UTLT_Assert(status == STATUS_OK, return STATUS_ERROR,
+                "Create PFCP Server for IPv4 error");
     status = PfcpServerList(&Self()->pfcpIPv6List, _pfcpReceiveCB, Self()->epfd);
-    UTLT_Assert(status == STATUS_OK, return STATUS_ERROR, "Create PFCP Server for IPv6 error");
+    UTLT_Assert(status == STATUS_OK, return STATUS_ERROR,
+                "Create PFCP Server for IPv6 error");
 
     Self()->pfcpSock = PfcpLocalSockFirst(&Self()->pfcpIPList);
     Self()->pfcpSock6 = PfcpLocalSockFirst(&Self()->pfcpIPv6List);
