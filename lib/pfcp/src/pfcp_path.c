@@ -181,19 +181,24 @@ Status PfcpReceiveFrom(Sock *sock, Bufblk **bufBlk, SockAddr *from) {
     }
 
     size = UdpRecvFrom(sock, (*bufBlk)->buf, (*bufBlk)->size);
-    //UTLT_Info("%s:%d", GetIP(&sock->localAddr), GetPort(&sock->localAddr));
-    (*bufBlk)->len = size;
+
+    UTLT_Debug("PFCP Receive packet: (local bind) %s:%d, (remote get) %s:%d",
+               GetIP(&sock->localAddr), GetPort(&sock->localAddr),
+               GetIP(&sock->remoteAddr), GetPort(&sock->remoteAddr));
+
     if (size <= 0) {
         BufblkFree(*bufBlk);
-        
+
         if (errno != EAGAIN) {
-            UTLT_Warning("SockRecvFromAddr failed(%d:%s)", errno, strerror(errno));
+            UTLT_Warning("SockRecvFromAddr failed(%d:%s)", errno,
+                         strerror(errno));
         }
 
         return STATUS_ERROR;
     } else {
         (*bufBlk)->len = size;
-        
+        *from = sock->remoteAddr;
+
         return STATUS_OK;
     }
 }
