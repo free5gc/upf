@@ -107,9 +107,11 @@ Status PfcpServerInit() {
     Status status;
 
     status = PfcpServerList(&Self()->pfcpIPList, _pfcpReceiveCB, Self()->epfd);
-    UTLT_Assert(status == STATUS_OK, return STATUS_ERROR, "Create PFCP Server for IPv4 error");
+    UTLT_Assert(status == STATUS_OK, return STATUS_ERROR,
+                "Create PFCP Server for IPv4 error");
     status = PfcpServerList(&Self()->pfcpIPv6List, _pfcpReceiveCB, Self()->epfd);
-    UTLT_Assert(status == STATUS_OK, return STATUS_ERROR, "Create PFCP Server for IPv6 error");
+    UTLT_Assert(status == STATUS_OK, return STATUS_ERROR,
+                "Create PFCP Server for IPv6 error");
 
     Self()->pfcpSock = PfcpLocalSockFirst(&Self()->pfcpIPList);
     Self()->pfcpSock6 = PfcpLocalSockFirst(&Self()->pfcpIPv6List);
