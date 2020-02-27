@@ -82,8 +82,6 @@ struct gtp5g_far {
 
     struct forwarding_parameter *fwd_param;
 
-    struct list_head    pdr_list;
-
     struct net_device   *dev;
     struct rcu_head     rcu_head;
 };
@@ -92,15 +90,16 @@ struct gtp5g_pdr {
     struct hlist_node    hlist_id;
     struct hlist_node    hlist_i_teid;
     struct hlist_node    hlist_addr;
+    struct hlist_node    hlist_related_far;
 
     u16     id;
     u32     precedence;
     u8      *outer_header_removal;
 
     struct gtp5g_pdi      *pdi;
-    struct gtp5g_far      *far;
 
-    struct list_head      node_for_far;
+    u32     *far_id;
+    struct gtp5g_far      *far;
 
     // AF_UNIX socket for buffer
     struct sockaddr_un addr_unix;
@@ -126,8 +125,12 @@ struct gtp5g_dev {
     unsigned int        hash_size;
     struct hlist_head    *pdr_id_hash;
     struct hlist_head    *far_id_hash;
+
     struct hlist_head    *i_teid_hash;      // Used for uplink GTP-U packet detect
     struct hlist_head    *addr_hash;        // Used for downlink packet detect
+
+    /* IEs list related to PDR*/
+    struct hlist_head    *related_far_hash;     // PDR list waiting the FAR to handle
 };
 
 static unsigned int gtp5g_net_id __read_mostly;
@@ -136,6 +139,8 @@ struct gtp5g_net {
     struct list_head gtp5g_dev_list;
 };
 
+/* Function unix_sock_{...} are used to handle buffering */
+// Send PDR ID, FAR action and buffered packet to user space
 static int unix_sock_send(struct gtp5g_pdr *pdr, void *buf, u32 len)
 {
     struct msghdr msg;
@@ -178,6 +183,7 @@ static int unix_sock_send(struct gtp5g_pdr *pdr, void *buf, u32 len)
     return rt;
 }
 
+// Delete the AF_UNIX client
 static void unix_sock_client_delete(struct gtp5g_pdr *pdr)
 {
     if (pdr->sock_for_buf)
@@ -186,6 +192,7 @@ static void unix_sock_client_delete(struct gtp5g_pdr *pdr)
     pdr->sock_for_buf = NULL;
 }
 
+// Create a AF_UNIX client by specific name sent from user space
 static int unix_sock_client_new(struct gtp5g_pdr *pdr)
 {
     int rt;
@@ -212,6 +219,7 @@ static int unix_sock_client_new(struct gtp5g_pdr *pdr)
     return 0;
 }
 
+// Handle PDR/FAR changed and affect buffering
 static int unix_sock_client_update(struct gtp5g_pdr *pdr)
 {
     struct gtp5g_far *far = pdr->far;
@@ -259,6 +267,7 @@ static int far_fill(struct gtp5g_far *far, struct gtp5g_dev *gtp, struct genl_in
 
     // Update related PDR for buffering
     struct gtp5g_pdr *pdr;
+    struct hlist_head *head;
 
     if (!far)
         return -EINVAL;
@@ -267,10 +276,6 @@ static int far_fill(struct gtp5g_far *far, struct gtp5g_dev *gtp, struct genl_in
 
     if (info->attrs[GTP5G_FAR_APPLY_ACTION]) {
         far->action = nla_get_u8(info->attrs[GTP5G_FAR_APPLY_ACTION]);
-
-        // Update related PDR for buffering
-        list_for_each_entry_rcu(pdr, &far->pdr_list, node_for_far)
-            unix_sock_client_update(pdr);
     }
 
     if (info->attrs[GTP5G_FAR_FORWARDING_PARAMETER] &&
@@ -300,6 +305,15 @@ static int far_fill(struct gtp5g_far *far, struct gtp5g_dev *gtp, struct genl_in
             hdr_creation->teid = nla_get_u32(hdr_creation_attrs[GTP5G_OUTER_HEADER_CREATION_O_TEID]);
             hdr_creation->peer_addr_ipv4.s_addr = nla_get_be32(hdr_creation_attrs[GTP5G_OUTER_HEADER_CREATION_PEER_ADDR_IPV4]);
             hdr_creation->port = nla_get_u16(hdr_creation_attrs[GTP5G_OUTER_HEADER_CREATION_PORT]);
+        }
+    }
+
+    /* Update PDRs which has not linked to this FAR */
+    head = &gtp->related_far_hash[u32_hashfn(far->id) % gtp->hash_size];
+    hlist_for_each_entry_rcu(pdr, head, hlist_related_far) {
+        if (*pdr->far_id == far->id) {
+            pdr->far = far;
+            unix_sock_client_update(pdr);
         }
     }
 
@@ -384,13 +398,19 @@ static int pdr_fill(struct gtp5g_pdr *pdr, struct gtp5g_dev *gtp, struct genl_in
     }
 
     if (info->attrs[GTP5G_PDR_FAR_ID]) {
-        u32 far_id = nla_get_u32(info->attrs[GTP5G_PDR_FAR_ID]);
-        pdr->far = far_find_by_id(gtp, far_id);
-        if (!pdr->far)
-            return -EINVAL;
+        if (!pdr->far_id) {
+            pdr->far_id = kzalloc(sizeof(*pdr->far_id), GFP_ATOMIC);
+            if (!pdr->far_id)
+                return -ENOMEM;
+        }
 
-        list_del_rcu(&pdr->node_for_far);
-        list_add_rcu(&pdr->node_for_far, &pdr->far->pdr_list);
+        *pdr->far_id = nla_get_u32(info->attrs[GTP5G_PDR_FAR_ID]);
+
+        if (!hlist_unhashed(&pdr->hlist_related_far))
+            hlist_del_rcu(&pdr->hlist_related_far);
+        hlist_add_head_rcu(&pdr->hlist_related_far, &gtp->related_far_hash[u32_hashfn(*pdr->far_id) % gtp->hash_size]);
+
+        pdr->far = far_find_by_id(gtp, *pdr->far_id);
     }
 
     if (unix_sock_client_update(pdr) < 0)
@@ -962,6 +982,7 @@ static void pdr_context_free(struct rcu_head *head)
         kfree(pdi->ue_addr_ipv4);
         kfree(pdi->f_teid);
         kfree(pdr->pdi);
+        kfree(pdr->far_id);
 
         sdf = pdi->sdf;
         if (pdi->sdf) {
@@ -995,6 +1016,9 @@ static void pdr_context_delete(struct gtp5g_pdr *pdr)
     if (!hlist_unhashed(&pdr->hlist_addr))
         hlist_del_rcu(&pdr->hlist_addr);
 
+    if (!hlist_unhashed(&pdr->hlist_related_far))
+        hlist_del_rcu(&pdr->hlist_related_far);
+
     call_rcu(&pdr->rcu_head, pdr_context_free);
 }
 
@@ -1015,11 +1039,23 @@ static void far_context_free(struct rcu_head *head)
 
 static void far_context_delete(struct gtp5g_far *far)
 {
+    struct gtp5g_dev *gtp = netdev_priv(far->dev);
+    struct hlist_head *head;
+    struct gtp5g_pdr *pdr;
+
     if (!far)
         return;
 
     if (!hlist_unhashed(&far->hlist_id))
         hlist_del_rcu(&far->hlist_id);
+
+    head = &gtp->related_far_hash[u32_hashfn(far->id) % gtp->hash_size];
+    hlist_for_each_entry_rcu(pdr, head, hlist_related_far) {
+        if (*pdr->far_id == far->id) {
+            pdr->far = NULL;
+            unix_sock_client_delete(pdr);
+        }
+    }
 
     call_rcu(&far->rcu_head, far_context_free);
 }
@@ -1049,6 +1085,12 @@ static int gtp5g_hashtable_new(struct gtp5g_dev *gtp, int hsize)
     if (gtp->far_id_hash == NULL)
         goto err3;
 
+    gtp->related_far_hash = kmalloc_array(hsize, sizeof(struct hlist_head),
+                        GFP_KERNEL);
+    if (gtp->related_far_hash == NULL)
+        goto err4;
+
+
     gtp->hash_size = hsize;
 
     for (i = 0; i < hsize; i++) {
@@ -1056,9 +1098,12 @@ static int gtp5g_hashtable_new(struct gtp5g_dev *gtp, int hsize)
         INIT_HLIST_HEAD(&gtp->i_teid_hash[i]);
         INIT_HLIST_HEAD(&gtp->pdr_id_hash[i]);
         INIT_HLIST_HEAD(&gtp->far_id_hash[i]);
+        INIT_HLIST_HEAD(&gtp->related_far_hash[i]);
     }
     return 0;
 
+err4:
+    kfree(gtp->related_far_hash);
 err3:
     kfree(gtp->pdr_id_hash);
 err2:
@@ -1086,6 +1131,7 @@ static void gtp5g_hashtable_free(struct gtp5g_dev *gtp)
     kfree(gtp->i_teid_hash);
     kfree(gtp->pdr_id_hash);
     kfree(gtp->far_id_hash);
+    kfree(gtp->related_far_hash);
 }
 
 static void gtp5g_link_setup(struct net_device *dev)
@@ -1745,7 +1791,6 @@ static int gtp5g_add_pdr(struct gtp5g_dev *gtp, struct genl_info *info)
     if (!pdr)
         return -ENOMEM;
 
-    INIT_LIST_HEAD(&pdr->node_for_far);
     sock_hold(gtp->sk1u);
     pdr->sk = gtp->sk1u;
     pdr->dev = gtp->dev;
@@ -1847,8 +1892,8 @@ static int gtp5g_genl_fill_pdr(struct sk_buff *skb, u32 snd_portid, u32 snd_seq,
             goto GENLMSG_FAIL;
     }
 
-    if (pdr->far) {
-        if (nla_put_u32(skb, GTP5G_PDR_FAR_ID, pdr->far->id))
+    if (pdr->far_id) {
+        if (nla_put_u32(skb, GTP5G_PDR_FAR_ID, *pdr->far_id))
             goto GENLMSG_FAIL;
     }
 
@@ -2091,7 +2136,6 @@ static int gtp5g_add_far(struct gtp5g_dev *gtp, struct genl_info *info)
         return -ENOMEM;
     }
 
-    INIT_LIST_HEAD(&far->pdr_list);
     far->dev = gtp->dev;
 
     err = far_fill(far, gtp, info);
@@ -2173,6 +2217,8 @@ static int gtp5g_genl_fill_far(struct sk_buff *skb, u32 snd_portid, u32 snd_seq,
     struct outer_header_creation *hdr_creation;
 
     int cnt;
+    struct gtp5g_dev *gtp = netdev_priv(far->dev);
+    struct hlist_head *head;
     struct gtp5g_pdr *pdr;
     u16 *u16_buf = kzalloc(0xff * sizeof(u16), GFP_KERNEL);
 
@@ -2206,15 +2252,17 @@ static int gtp5g_genl_fill_far(struct sk_buff *skb, u32 snd_portid, u32 snd_seq,
         nla_nest_end(skb, nest_fwd_param);
     }
 
-    if (!list_empty(&far->pdr_list)) {
-        cnt = 0;
-        list_for_each_entry_rcu(pdr, &far->pdr_list, node_for_far) {
-            if (cnt >= 0xff)
-                goto GENLMSG_FAIL;
-            
-            u16_buf[cnt++] = pdr->id;
-        }
+    cnt = 0;    
+    head = &gtp->related_far_hash[u32_hashfn(far->id) % gtp->hash_size];
+    hlist_for_each_entry_rcu(pdr, head, hlist_related_far) {
+        if (cnt >= 0xff)
+            goto GENLMSG_FAIL;
 
+        if (*pdr->far_id == far->id)
+            u16_buf[cnt++] = pdr->id;
+    }
+
+    if (cnt) {
         if (nla_put(skb, GTP5G_FAR_RELATED_TO_PDR,
             cnt * sizeof(u16) / sizeof(char), u16_buf))
             goto GENLMSG_FAIL;
