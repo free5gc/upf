@@ -343,7 +343,7 @@ void *UTLT_Calloc(uint32_t num, uint32_t size) {
 
 Status UTLT_Free(void *buf) {
     Bufblk tmpBufblk;
-    tmpBufblk.buf = buf;
+    tmpBufblk.buf = buf - sizeof(uint32_t);
     tmpBufblk.size = *(uint32_t *)(buf - sizeof(uint32_t));
 
     UTLT_Assert(BufFree(&tmpBufblk) == STATUS_OK, return STATUS_ERROR,
@@ -355,7 +355,7 @@ Status UTLT_Free(void *buf) {
 Status UTLT_Resize(void *buf, uint32_t size) {
     Bufblk tmpBufblk;
 
-    tmpBufblk.buf = buf;
+    tmpBufblk.buf = buf - sizeof(uint32_t);
     tmpBufblk.size = *(uint32_t *)(buf - sizeof(uint32_t));
     tmpBufblk.len = tmpBufblk.size;
 
