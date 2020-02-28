@@ -91,7 +91,7 @@ Status UpfContextInit() {
     TimerListInit(&self.timerServiceList);
 
     self.sessionHash = HashMake();
-    self.bufPacketHash = HashMake();
+    //self.bufPacketHash = HashMake();
 
     upfContextInitialized = 1;
 
@@ -109,8 +109,8 @@ Status UpfContextTerminate() {
 
     UTLT_Assert(self.sessionHash, , "Session Hash Table missing?!");
     HashDestroy(self.sessionHash);
-    UTLT_Assert(self.bufPacketHash, , "Buffer Hash Table missing?!");
-    HashDestroy(self.bufPacketHash);
+    //UTLT_Assert(self.bufPacketHash, , "Buffer Hash Table missing?!");
+    //HashDestroy(self.bufPacketHash);
 
     // Terminate resource
     IndexTerminate(&upfBarPool);
@@ -128,14 +128,14 @@ Status UpfContextTerminate() {
     SockNodeListFree(&self.pfcpIPList);
     SockNodeListFree(&self.pfcpIPv6List);
 
-    UpfBufPacketRemoveAll();
+    //UpfBufPacketRemoveAll();
     UpfApnRemoveAll();
 
     upfContextInitialized = 0;
 
     return status;
 }
-
+/*
 HashIndex *UpfBufPacketFirst() {
     UTLT_Assert(self.bufPacketHash, return NULL, "");
     return HashFirst(self.bufPacketHash);
@@ -205,19 +205,19 @@ Status UpfBufPacketRemoveAll() {
         bufPacket = UpfBufPacketThis(hashIdx);
         UpfBufPacketRemove(bufPacket);
     }
-    /* List version
-    UpfBufPdr *node, *nextNode;
-
-    node = ListFirst(&self.bufPacketList);
-    while (node) {
-      nextNode = (UpfBufPacket *)ListNext(node);
-      UpfBufPacketRemove(node);
-      node = nextNode;
-    }
-    */
+    // List version
+    //UpfBufPdr *node, *nextNode;
+    //
+    //node = ListFirst(&self.bufPacketList);
+    //while (node) {
+    //  nextNode = (UpfBufPacket *)ListNext(node);
+    //  UpfBufPacketRemove(node);
+    //  node = nextNode;
+    //}
 
     return STATUS_OK;
 }
+*/
 
 /**
  * @param  *natifname: nullable

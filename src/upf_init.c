@@ -100,6 +100,9 @@ Status UpfTerminate() {
     UTLT_Assert(GtpRouteTerminate() == STATUS_OK, status |= STATUS_ERROR,
                 "GTP routes removal failed");
 
+    UTLT_Assert(PfcpXactTerminate() == STATUS_OK, status |= STATUS_ERROR,
+                "PFCP Transaction terminate failed");
+
     UTLT_Assert(PfcpServerTerminate() == STATUS_OK, status |= STATUS_ERROR,
                 "PFCP server terminate failed");
 
@@ -119,9 +122,6 @@ Status UpfTerminate() {
 
     UTLT_Assert(UtltLibTerminate() == STATUS_OK, status |= STATUS_ERROR,
                 "UPF library terminate failed");
-
-    UTLT_Assert(PfcpXactTerminate() == STATUS_OK, status |= STATUS_ERROR,
-                "PFCP Transaction terminate failed");
 
     if (status == STATUS_OK)
         UTLT_Info("UPF terminated");

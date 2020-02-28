@@ -98,7 +98,7 @@ typedef struct {
     // Session : hash(IMSI+APN)
     Hash            *sessionHash;
     // Save buffer packet here
-    Hash            *bufPacketHash;
+    //Hash            *bufPacketHash;
 
     // Config file
     const char      *configFilePath;
