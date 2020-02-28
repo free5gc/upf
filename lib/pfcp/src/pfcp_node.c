@@ -9,7 +9,7 @@
 
 #include "pfcp_node.h"
 
-#define MAX_PFCP_NODE_POOL_SIZE 512
+#define MAX_PFCP_NODE_POOL_SIZE 8192
 
 PoolDeclare(pfcpNodePool, PfcpNode, MAX_PFCP_NODE_POOL_SIZE);
 
