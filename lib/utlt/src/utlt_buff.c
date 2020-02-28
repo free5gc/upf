@@ -9,16 +9,16 @@
 #include "utlt_debug.h"
 #include "utlt_pool.h"
 
-#define MAX_NUM_OF_BUFBLK_POOL      256
+#define MAX_NUM_OF_BUFBLK_POOL       256
 
-#define MAX_NUM_OF_BUFBLK_POOL_64   8192
-#define MAX_NUM_OF_BUFBLK_POOL_128  8192
-#define MAX_NUM_OF_BUFBLK_POOL_256  8192
-#define MAX_NUM_OF_BUFBLK_POOL_512  4096
-#define MAX_NUM_OF_BUFBLK_POOL_1024 4096
-#define MAX_NUM_OF_BUFBLK_POOL_2048 2048
-#define MAX_NUM_OF_BUFBLK_POOL_4096 2048
-#define MAX_NUM_OF_BUFBLK_POOL_8192 2048
+#define MAX_NUM_OF_BUFBLK_POOL_64    128
+#define MAX_NUM_OF_BUFBLK_POOL_128   128
+#define MAX_NUM_OF_BUFBLK_POOL_256   128
+#define MAX_NUM_OF_BUFBLK_POOL_512   64
+#define MAX_NUM_OF_BUFBLK_POOL_1024  64
+#define MAX_NUM_OF_BUFBLK_POOL_2048  32
+#define MAX_NUM_OF_BUFBLK_POOL_4096  32
+#define MAX_NUM_OF_BUFBLK_POOL_8192  16
 #define MAX_NUM_OF_BUFBLK_POOL_16384 8
 #define MAX_NUM_OF_BUFBLK_POOL_32768 8
 #define MAX_NUM_OF_BUFBLK_POOL_65536 4
@@ -77,12 +77,12 @@ int BufIsNotEnough(Bufblk *bufblk, uint32_t num, uint32_t size);
             UTLT_Assert((__bufblk)->buf, (__bufblk)->size = (__bufblk)->len = 0; return STATUS_ERROR, "bufPool"#__sizeNum" is empty"); \
             (__bufblk)->size = __sizeNum; \
             (__bufblk)->len = 0; \
-            /* UTLT_Warning("Memory Alloc Size["#__sizeNum"]");*/ \
+            UTLT_Trace("Buffer Alloc Size["#__sizeNum"]"); \
             break; \
         case BUF_FREE : \
             PoolFree(&bufPool##__sizeNum, (bufPool##__sizeNum##_t *)(__bufblk)->buf); \
             (__bufblk)->size = (__bufblk)->len = 0; \
-            /* UTLT_Warning("Memory Free Size["#__sizeNum"]");*/ \
+            UTLT_Trace("Buffer Free Size["#__sizeNum"]"); \
             break; \
         default : \
             (__bufblk)->size = (__bufblk)->len = 0; \

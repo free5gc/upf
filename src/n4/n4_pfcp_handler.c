@@ -796,7 +796,7 @@ Status UpfN4HandleAssociationSetupRequest(PfcpXact *xact,
     UTLT_Assert(status == STATUS_OK, return STATUS_ERROR,
                 "xact commit error");
 
-    UTLT_Info("[PFCP] Association Session Setup Response");
+    UTLT_Info("[PFCP] Association Setup Response");
     return STATUS_OK;
 }
 

@@ -9,7 +9,7 @@
 
 #include "pfcp_node.h"
 
-#define MAX_PFCP_NODE_POOL_SIZE 8192
+#define MAX_PFCP_NODE_POOL_SIZE 512
 
 PoolDeclare(pfcpNodePool, PfcpNode, MAX_PFCP_NODE_POOL_SIZE);
 
@@ -30,7 +30,8 @@ Status PfcpNodeTerminate(void) {
 }
 
 Status PfcpAddNode(ListNode *list, PfcpNode **node,
-                   const SockAddr *allList, _Bool noIpv4, _Bool noIpv6, _Bool preferIpv4) {
+                   const SockAddr *allList, _Bool noIpv4,
+                   _Bool noIpv6, _Bool preferIpv4) {
     Status status;
     PfcpNode *newNode = NULL;
     SockAddr *preferredList = NULL;
@@ -116,10 +117,6 @@ Status PfcpRemoveNode(ListNode *list, PfcpNode *node) {
     UTLT_Assert(node, return STATUS_ERROR, "pfcp node error");
 
     ListRemove(list, node);
-
-    if (node->sock) {
-        SockFree(node->sock);
-    }
 
     if (node->timeHeartbeat) {
         TimerDelete(node->timeHeartbeat);
