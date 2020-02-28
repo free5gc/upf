@@ -207,13 +207,13 @@ Status UpfN4HandleCreatePdr(UpfSession *session, CreatePDR *createPdr) {
             // TODO: IPv6
         }
     }
-    /*
-      if (createPdr->pDI.sDFFilter) {
-      gtp5g_pdr_set_sdf_filter_description();
-      gtp5g_pdr_set_sdf_filter_id();
 
-      }
-    */
+    // PDI SDF filter
+    if (createPdr->pDI.sDFFilter.presence) {
+        gtp5g_pdr_set_sdf_filter_description(pdr,
+                                             createPdr->pDI.sDFFilter.value);
+    }
+
     // Outer Header Removal
     if (createPdr->outerHeaderRemoval.presence) {
         uint8_t outerHeader =
