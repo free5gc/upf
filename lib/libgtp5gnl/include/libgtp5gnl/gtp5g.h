@@ -31,7 +31,7 @@ void gtp5g_pdr_set_role_addr_ipv4(struct gtp5g_pdr *pdr, struct in_addr *role_ad
 /* Not in 3GPP spec, just used for buffering */
 void gtp5g_pdr_set_unix_sock_path(struct gtp5g_pdr *pdr, const char *unix_sock_path);
 
-void gtp5g_pdr_set_sdf_fliter_description(struct gtp5g_pdr *pdr, const char *rule_str);
+void gtp5g_pdr_set_sdf_filter_description(struct gtp5g_pdr *pdr, const char *rule_str);
 void gtp5g_pdr_set_tos_traffic_class(struct gtp5g_pdr *pdr, uint16_t tos_traffic_class);
 void gtp5g_pdr_set_security_param_idx(struct gtp5g_pdr *pdr, uint32_t security_param_idx);
 void gtp5g_pdr_set_flow_label(struct gtp5g_pdr *pdr, uint32_t flow_label);
@@ -45,7 +45,7 @@ struct in_addr *gtp5g_pdr_get_ue_addr_ipv4(struct gtp5g_pdr *pdr);
 uint32_t *gtp5g_pdr_get_local_f_teid_teid(struct gtp5g_pdr *pdr);
 struct in_addr *gtp5g_pdr_get_local_f_teid_gtpu_addr_ipv4(struct gtp5g_pdr *pdr);
 
-// TODO: Get sdf_fliter value
+// TODO: Get sdf_filter value
 
 // TODO: Get FAR value
 void gtp5g_far_set_id(struct gtp5g_far *far, uint32_t id);

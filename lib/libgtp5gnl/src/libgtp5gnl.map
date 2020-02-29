@@ -48,7 +48,7 @@ global:
   gtp5g_pdr_set_unix_sock_path;
   gtp5g_pdr_set_ue_addr_ipv4;
   gtp5g_pdr_set_local_f_teid;
-  gtp5g_pdr_set_sdf_fliter_description;
+  gtp5g_pdr_set_sdf_filter_description;
   gtp5g_pdr_set_tos_traffic_class;
   gtp5g_pdr_set_security_param_idx;
   gtp5g_pdr_set_flow_label;

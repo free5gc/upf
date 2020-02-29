@@ -210,7 +210,7 @@ Status UpfN4HandleCreatePdr(UpfSession *session, CreatePDR *createPdr) {
 
     // PDI SDF filter
     if (createPdr->pDI.sDFFilter.presence) {
-        gtp5g_pdr_set_sdf_filter_description(pdr,
+        gtp5g_pdr_set_sdf_filter_description(tmpPdr,
                                              createPdr->pDI.sDFFilter.value);
     }
 

@@ -137,7 +137,7 @@ static struct gtp5g_pdr *prepare_pdr(int argc, char *argv[])
                 gtp5g_pdr_set_local_f_teid(pdr, htonl(atoi(optarg)), &(sa.sin_addr));
                 break;
             case 'd': // --sdf-desp {description string}
-                gtp5g_pdr_set_sdf_fliter_description(pdr, optarg);
+                gtp5g_pdr_set_sdf_filter_description(pdr, optarg);
                 break;
             case 't': // --sdf-tos-traff-cls
                 gtp5g_pdr_set_tos_traffic_class(pdr, atoi(optarg));
