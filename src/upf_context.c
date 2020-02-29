@@ -355,9 +355,11 @@ UpfSession *UpfSessionAdd(PfcpUeIpAddr *ueIp, uint8_t *apn, uint8_t pdnType) {
 
     session->pdn.paa.pdnType = pdnType;
     if (pdnType == PFCP_PDN_TYPE_IPV4) {
-        session->pdn.paa.addr4 = ueIp->addr4;
+        session->ueIpv4.addr4 = ueIp->addr4;
+        //session->pdn.paa.addr4 = ueIp->addr4;
     } else if (pdnType == PFCP_PDN_TYPE_IPV6) {
-        session->pdn.paa.addr6 = ueIp->addr6;
+        session->ueIpv6.addr6 = ueIp->addr6;
+        //session->pdn.paa.addr6 = ueIp->addr6;
     } else if (pdnType == PFCP_PDN_TYPE_IPV4V6) {
         // TODO
         // session->ueIpv4 = UpfUeIPAlloc(AF_INET, apn);
