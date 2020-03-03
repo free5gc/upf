@@ -118,10 +118,6 @@ Status PfcpRemoveNode(ListNode *list, PfcpNode *node) {
 
     ListRemove(list, node);
 
-    if (node->sock) {
-        SockFree(node->sock);
-    }
-
     if (node->timeHeartbeat) {
         TimerDelete(node->timeHeartbeat);
     }

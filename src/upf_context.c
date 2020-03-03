@@ -42,7 +42,8 @@ UpfContext *Self() {
 }
 
 Status UpfContextInit() {
-    UTLT_Assert(upfContextInitialized == 0, return STATUS_ERROR, "UPF context has been initialized!");
+    UTLT_Assert(upfContextInitialized == 0, return STATUS_ERROR,
+                "UPF context has been initialized!");
 
     memset(&self, 0, sizeof(UpfContext));
 
@@ -51,8 +52,8 @@ Status UpfContextInit() {
     ListInit(&self.gtpv1v6DevList);
 
     // TODO : Add PFCP init here
-    ListInit(&self.pfcpIPList);
-    ListInit(&self.pfcpIPv6List);
+    //ListInit(&self.pfcpIPList);
+    //ListInit(&self.pfcpIPv6List);
 
     // TODO : Add by self if context has been updated
     // TODO: check if gtp node need to init?
@@ -72,7 +73,8 @@ Status UpfContextInit() {
 
     // Set Default Value
     self.gtpDevNamePrefix = "upfgtp";
-    self.gtpv1Port = GTPV1_U_UDP_PORT; // defined in utlt_3gpptypes instead of GTP_V1_PORT defined in GTP_PATH;
+    self.gtpv1Port = GTPV1_U_UDP_PORT;
+    // defined in utlt_3gpptypes instead of GTP_V1_PORT defined in GTP_PATH;
     self.pfcpPort = PFCP_UDP_PORT;
     self.gtpv1DevSN = 0;
 
@@ -96,7 +98,8 @@ Status UpfContextInit() {
 
 // TODO : Need to Remove List Members iterativelyatively
 Status UpfContextTerminate() {
-    UTLT_Assert(upfContextInitialized == 1, return STATUS_ERROR, "UPF context has been terminated!");
+    UTLT_Assert(upfContextInitialized == 1, return STATUS_ERROR,
+                "UPF context has been terminated!");
 
     Status status = STATUS_OK;
 
@@ -116,7 +119,8 @@ Status UpfContextTerminate() {
     PfcpRemoveAllNodes(&self.upfN4List);
     PfcpNodeTerminate();
 
-    // // TODO: remove gtpv1TunnelList, ranS1uList, upfN4LIst, apnList, pdrList, farList, qerList, urrLIist
+    // TODO: remove gtpv1TunnelList, ranS1uList, upfN4LIst, apnList,
+    // pdrList, farList, qerList, urrLIist
     Gtpv1DevListFree(&self.gtpv1DevList);
     Gtpv1DevListFree(&self.gtpv1v6DevList);
     SockNodeListFree(&self.pfcpIPList);
@@ -351,9 +355,11 @@ UpfSession *UpfSessionAdd(PfcpUeIpAddr *ueIp, uint8_t *apn, uint8_t pdnType) {
 
     session->pdn.paa.pdnType = pdnType;
     if (pdnType == PFCP_PDN_TYPE_IPV4) {
-        session->pdn.paa.addr4 = ueIp->addr4;
+        session->ueIpv4.addr4 = ueIp->addr4;
+        //session->pdn.paa.addr4 = ueIp->addr4;
     } else if (pdnType == PFCP_PDN_TYPE_IPV6) {
-        session->pdn.paa.addr6 = ueIp->addr6;
+        session->ueIpv6.addr6 = ueIp->addr6;
+        //session->pdn.paa.addr6 = ueIp->addr6;
     } else if (pdnType == PFCP_PDN_TYPE_IPV4V6) {
         // TODO
         // session->ueIpv4 = UpfUeIPAlloc(AF_INET, apn);
