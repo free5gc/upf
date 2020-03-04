@@ -313,7 +313,9 @@ static int far_fill(struct gtp5g_far *far, struct gtp5g_dev *gtp, struct genl_in
     hlist_for_each_entry_rcu(pdr, head, hlist_related_far) {
         if (*pdr->far_id == far->id) {
             pdr->far = far;
-            unix_sock_client_update(pdr);
+            if (unix_sock_client_update(pdr) < 0)
+                pr_err("PDR[%u] update fail when FAR[%u] apply action is changed",
+                    pdr->id, far->id);
         }
     }
 

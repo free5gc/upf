@@ -52,7 +52,8 @@ static void gtp5g_build_pdr_payload(struct nlmsghdr *nlh, struct gtp5g_dev *dev,
 
     // Level 1 PDR
     mnl_attr_put_u16(nlh, GTP5G_PDR_ID, pdr->id);
-    mnl_attr_put_u32(nlh, GTP5G_PDR_PRECEDENCE, pdr->precedence);
+    if (pdr->precedence)
+        mnl_attr_put_u32(nlh, GTP5G_PDR_PRECEDENCE, *pdr->precedence);
     if (pdr->outer_hdr_removal)
         mnl_attr_put_u8(nlh, GTP5G_OUTER_HEADER_REMOVAL, *pdr->outer_hdr_removal);
     if (pdr->far_id)
@@ -141,6 +142,13 @@ int gtp5g_add_pdr(int genl_id, struct mnl_socket *nl, struct gtp5g_dev *dev, str
 
     nlh = genl_nlmsg_build_hdr(buf, genl_id, NLM_F_EXCL | NLM_F_ACK, ++seq,
                                GTP5G_CMD_ADD_PDR);
+
+    // Add mandatory IEs here
+    if (!pdr->precedence) {
+        perror("Add PDR must have precedence");
+        return -1;
+    }
+
     gtp5g_build_pdr_payload(nlh, dev, pdr);
 
     if (genl_socket_talk(nl, nlh, seq, NULL, NULL) < 0) {
@@ -605,7 +613,7 @@ void gtp5g_print_pdr(struct gtp5g_pdr *pdr)
     }
 
     printf("[PDR No.%u Info]\n", pdr->id);
-    printf("%s- Precedence: %u\n", indent_str, pdr->precedence);
+    printf("%s- Precedence: %u\n", indent_str, *pdr->precedence);
     if (pdr->outer_hdr_removal)
         printf("%s- Outer Header Removal: %u\n", indent_str, *pdr->outer_hdr_removal);
     

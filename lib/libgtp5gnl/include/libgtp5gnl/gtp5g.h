@@ -45,7 +45,7 @@ struct in_addr *gtp5g_pdr_get_ue_addr_ipv4(struct gtp5g_pdr *pdr);
 uint32_t *gtp5g_pdr_get_local_f_teid_teid(struct gtp5g_pdr *pdr);
 struct in_addr *gtp5g_pdr_get_local_f_teid_gtpu_addr_ipv4(struct gtp5g_pdr *pdr);
 
-// TODO: Get sdf_filter value
+// TODO: Get sdf_fliter value
 
 // TODO: Get FAR value
 void gtp5g_far_set_id(struct gtp5g_far *far, uint32_t id);

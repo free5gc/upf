@@ -71,6 +71,7 @@ EXPORT_SYMBOL(gtp5g_dev_alloc);
 
 gtp5g_struct_alloc_exp(pdr, struct gtp5g_pdr);
 gtp5g_struct_alloc_no_exp(pdi, struct gtp5g_pdi);
+gtp5g_struct_alloc_no_exp(precedence, uint32_t);
 gtp5g_struct_alloc_no_exp(pdr_outer_header_removal, uint8_t);
 gtp5g_struct_alloc_no_exp(pdr_far_id, uint32_t);
 
@@ -158,6 +159,9 @@ static void gtp5g_pdi_free(struct gtp5g_pdi *pdi)
 
 void gtp5g_pdr_free(struct gtp5g_pdr *pdr)
 {
+    if (pdr->precedence)
+        free(pdr->precedence);
+    
     if (pdr->pdi)
         gtp5g_pdi_free(pdr->pdi);
 
@@ -210,6 +214,12 @@ static inline void unix_sock_path_may_alloc(struct gtp5g_pdr *pdr)
 {
     if (!pdr->unix_sock_path)
         pdr->unix_sock_path = gtp5g_unix_sock_path_alloc();
+}
+
+static inline void precedence_may_alloc(struct gtp5g_pdr *pdr)
+{
+    if (!pdr->precedence)
+        pdr->precedence = gtp5g_precedence_alloc();
 }
 
 static inline void pdi_may_alloc(struct gtp5g_pdr *pdr)
@@ -320,7 +330,8 @@ EXPORT_SYMBOL(gtp5g_pdr_set_id);
 
 void gtp5g_pdr_set_precedence(struct gtp5g_pdr *pdr, uint32_t precedence)
 {
-    pdr->precedence = precedence;
+    precedence_may_alloc(pdr);
+    *pdr->precedence = precedence;
 }
 EXPORT_SYMBOL(gtp5g_pdr_set_precedence);
 
@@ -391,11 +402,11 @@ void gtp5g_pdr_set_sdf_filter_description(struct gtp5g_pdr *pdr, const char *rul
     int cflags = REG_EXTENDED | REG_ICASE;
 
     if (regcomp(&preg, reg, cflags) != 0) {
-        perror("Regex string for SDF filter description format error");
+        perror("Regex string for SDF fliter description format error");
         goto err;
     }
     if (regexec(&preg, rule_str, nmatch, pmatch, 0) != 0) {
-        perror("SDF filter description format error");
+        perror("SDF fliter description format error");
         goto err;
     }
 
@@ -409,7 +420,7 @@ void gtp5g_pdr_set_sdf_filter_description(struct gtp5g_pdr *pdr, const char *rul
         rule->action = GTP5G_SDF_FILTER_PERMIT;
     }
     else {
-        perror("SDF filter description action not support");
+        perror("SDF fliter description action not support");
         goto err;
     }
 
@@ -421,7 +432,7 @@ void gtp5g_pdr_set_sdf_filter_description(struct gtp5g_pdr *pdr, const char *rul
     else if (strcmp(buf, "out") == 0)
         rule->direction = GTP5G_SDF_FILTER_OUT;
     else {
-        perror("SDF filter description direction not support");
+        perror("SDF fliter description direction not support");
         goto err;
     }
 
@@ -433,7 +444,7 @@ void gtp5g_pdr_set_sdf_filter_description(struct gtp5g_pdr *pdr, const char *rul
     else {
         int tmp = atoi(buf);
         if (tmp > 0xff) {
-            perror("SDF filter description protocol not support");
+            perror("SDF fliter description protocol not support");
             goto err;
         }
         rule->proto = tmp;
@@ -445,7 +456,7 @@ void gtp5g_pdr_set_sdf_filter_description(struct gtp5g_pdr *pdr, const char *rul
         strncpy(buf, rule_str + pmatch[5].rm_so + 1, len - 1); buf[len - 1] = '\0';
         int smask = atoi(buf);
         if (smask > 32) {
-            perror("SDF filter description SRC mask is invalid");
+            perror("SDF fliter description SRC mask is invalid");
             goto err;
         }
         rule->smask.s_addr = decimal_to_netmask(smask);
@@ -459,7 +470,7 @@ void gtp5g_pdr_set_sdf_filter_description(struct gtp5g_pdr *pdr, const char *rul
     if (strcmp(buf, "any") == 0)
         inet_pton(AF_INET, "0.0.0.0", &rule->src);
     else if(inet_pton(AF_INET, buf, &rule->src) != 1) {
-        perror("SDF filter description src ip is invalid");
+        perror("SDF fliter description src ip is invalid");
         goto err;
     }
 
@@ -478,7 +489,7 @@ void gtp5g_pdr_set_sdf_filter_description(struct gtp5g_pdr *pdr, const char *rul
         strncpy(buf, rule_str + pmatch[9].rm_so + 1, len - 1); buf[len - 1] = '\0';
         int dmask = atoi(buf);
         if (dmask > 32) {
-            perror("SDF filter description Dest mask is invalid");
+            perror("SDF fliter description Dest mask is invalid");
             goto err;
         }
         rule->dmask.s_addr = decimal_to_netmask(dmask);
@@ -492,7 +503,7 @@ void gtp5g_pdr_set_sdf_filter_description(struct gtp5g_pdr *pdr, const char *rul
     if (strcmp(buf, "assigned") == 0)
         inet_pton(AF_INET, "0.0.0.0", &rule->dest);
     else if(inet_pton(AF_INET, buf, &rule->dest) != 1) {
-        perror("SDF filter description dest ip is invalid");
+        perror("SDF fliter description dest ip is invalid");
         goto err;
     }
 
@@ -548,7 +559,7 @@ EXPORT_SYMBOL(gtp5g_pdr_get_id);
 
 uint32_t *gtp5g_pdr_get_precedence(struct gtp5g_pdr *pdr)
 {
-    return &pdr->precedence;
+    return pdr->precedence;
 }
 EXPORT_SYMBOL(gtp5g_pdr_get_precedence);
 

@@ -79,7 +79,7 @@ struct gtp5g_pdi {
 
 struct gtp5g_pdr {
     uint16_t id;
-    uint32_t precedence;
+    uint32_t *precedence;
     struct gtp5g_pdi *pdi;
 
     uint8_t *outer_hdr_removal;
