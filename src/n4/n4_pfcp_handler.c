@@ -73,18 +73,19 @@ void UpfN4HandleCreatePdr(UpfSession *session, CreatePDR *createPdr, UpfPdr **up
         tmpPdr->ulDl = 1;
     }
 
-    PfcpFTeid *fTeid;
-    UTLT_Assert(createPdr->pDI.localFTEID.presence, UpfPdrRemove(tmpPdr); return, "local F-TEID not found");
-    fTeid = (PfcpFTeid *)createPdr->pDI.localFTEID.value;
-    tmpPdr->upfGtpUTeid = ntohl(fTeid->teid);
-    if (fTeid->v4 && fTeid->v6) {
-        memcpy(&tmpPdr->dualStack, &fTeid->dualStack,
-               sizeof(struct in_addr) + sizeof(struct in6_addr));
-        // TODO: session ueIp dualStack
-    } else if (fTeid->v4) {
-        tmpPdr->addr4 = fTeid->addr4;
-    } else if (fTeid->v6) {
-        tmpPdr->addr6 = fTeid->addr6;
+    if (createPdr->pDI.localFTEID.presence) {
+        PfcpFTeid *fTeid;
+        fTeid = (PfcpFTeid *)createPdr->pDI.localFTEID.value;
+        tmpPdr->upfGtpUTeid = ntohl(fTeid->teid);
+        if (fTeid->v4 && fTeid->v6) {
+            memcpy(&tmpPdr->dualStack, &fTeid->dualStack,
+                   sizeof(struct in_addr) + sizeof(struct in6_addr));
+            // TODO: session ueIp dualStack
+        } else if (fTeid->v4) {
+            tmpPdr->addr4 = fTeid->addr4;
+        } else if (fTeid->v6) {
+            tmpPdr->addr6 = fTeid->addr6;
+        }
     }
 
     // UE IP
@@ -115,10 +116,12 @@ void UpfN4HandleCreatePdr(UpfSession *session, CreatePDR *createPdr, UpfPdr **up
         if (tmpPdr->sourceInterface == PFCP_SRC_INTF_ACCESS) {
             if (ListFirst(&session->dlPdrList)) {
                 // TODO: here we except dl only one, but this is not true
-                UpfPdr *dlPdr = ListFirst(&session->dlPdrList);
+                UpfPdr *dlPdr = (UpfPdr*)ListFirst(&session->dlPdrList);
                 UpfFar *tmpFar = dlPdr->far;
-                Status status = _AddGtpByPdrFar(tmpPdr, tmpFar);
-                UTLT_Assert(status == STATUS_OK, , "Gtp Add failed");
+                if (tmpPdr && tmpFar) {
+                    Status status = _AddGtpByPdrFar(tmpPdr, tmpFar);
+                    UTLT_Assert(status == STATUS_OK, , "Gtp Add failed");
+                }
             }
         }
     }
@@ -167,7 +170,7 @@ void UpfN4HandleCreateFar(UpfSession *session, CreateFAR *createFar, UpfFar **up
                 UTLT_Assert(status == STATUS_OK, UpfFarRemove(tmpFar); return, "Outer hdr to IP error");
 
                 // Maybe add tunnel also be here
-                UpfPdr *tmpPdr = ListFirst(&session->ulPdrList);
+                UpfPdr *tmpPdr = (UpfPdr*)ListFirst(&session->ulPdrList);
                 if (tmpPdr) {
                     Status status = _AddGtpByPdrFar(tmpPdr, tmpFar);
                     UTLT_Assert(status == STATUS_OK, , "Gtp Add failed");
