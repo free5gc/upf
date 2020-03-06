@@ -52,7 +52,9 @@ static void gtp5g_build_far_payload(struct nlmsghdr *nlh, struct gtp5g_dev *dev,
 
     // Level 1 FAR
     mnl_attr_put_u32(nlh, GTP5G_FAR_ID, far->id);
-    mnl_attr_put_u8(nlh, GTP5G_FAR_APPLY_ACTION, far->apply_action);
+    
+    if (far->apply_action)
+        mnl_attr_put_u8(nlh, GTP5G_FAR_APPLY_ACTION, far->apply_action);
 
     // Level 2 FAR : Forwarding Parameter
     struct nlattr *fwd_param_nest, *hdr_creation_nest;

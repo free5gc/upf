@@ -71,6 +71,7 @@ EXPORT_SYMBOL(gtp5g_dev_alloc);
 
 gtp5g_struct_alloc_exp(pdr, struct gtp5g_pdr);
 gtp5g_struct_alloc_no_exp(pdi, struct gtp5g_pdi);
+gtp5g_struct_alloc_no_exp(precedence, uint32_t);
 gtp5g_struct_alloc_no_exp(pdr_outer_header_removal, uint8_t);
 gtp5g_struct_alloc_no_exp(pdr_far_id, uint32_t);
 
@@ -158,6 +159,9 @@ static void gtp5g_pdi_free(struct gtp5g_pdi *pdi)
 
 void gtp5g_pdr_free(struct gtp5g_pdr *pdr)
 {
+    if (pdr->precedence)
+        free(pdr->precedence);
+    
     if (pdr->pdi)
         gtp5g_pdi_free(pdr->pdi);
 
@@ -210,6 +214,12 @@ static inline void unix_sock_path_may_alloc(struct gtp5g_pdr *pdr)
 {
     if (!pdr->unix_sock_path)
         pdr->unix_sock_path = gtp5g_unix_sock_path_alloc();
+}
+
+static inline void precedence_may_alloc(struct gtp5g_pdr *pdr)
+{
+    if (!pdr->precedence)
+        pdr->precedence = gtp5g_precedence_alloc();
 }
 
 static inline void pdi_may_alloc(struct gtp5g_pdr *pdr)
@@ -320,7 +330,8 @@ EXPORT_SYMBOL(gtp5g_pdr_set_id);
 
 void gtp5g_pdr_set_precedence(struct gtp5g_pdr *pdr, uint32_t precedence)
 {
-    pdr->precedence = precedence;
+    precedence_may_alloc(pdr);
+    *pdr->precedence = precedence;
 }
 EXPORT_SYMBOL(gtp5g_pdr_set_precedence);
 
@@ -548,7 +559,7 @@ EXPORT_SYMBOL(gtp5g_pdr_get_id);
 
 uint32_t *gtp5g_pdr_get_precedence(struct gtp5g_pdr *pdr)
 {
-    return &pdr->precedence;
+    return pdr->precedence;
 }
 EXPORT_SYMBOL(gtp5g_pdr_get_precedence);
 
