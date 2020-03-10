@@ -13,7 +13,7 @@
 #include "pfcp_convert.h"
 #include "gtp_path.h"
 #include "n4_pfcp_build.h"
-#include "up/up_gtp_path.h"
+#include "up/up_path.h"
 #include "gtp5g.h"
 #include "gtp5gnl.h"
 #include "gtp_tunnel.h"
@@ -171,6 +171,7 @@ Status UpfN4HandleCreatePdr(UpfSession *session, CreatePDR *createPdr) {
     uint16_t pdrId = *((uint16_t *)createPdr->pDRID.value);
     UTLT_Debug("PDR ID: %u", ntohs(pdrId));
     gtp5g_pdr_set_id(tmpPdr, pdrId);
+    gtp5g_pdr_set_unix_sock_path(tmpPdr, Self()->buffSockPath);
 
     // precedence
     uint32_t precedence = *((uint32_t *)createPdr->precedence.value);
@@ -240,7 +241,7 @@ Status UpfN4HandleCreatePdr(UpfSession *session, CreatePDR *createPdr) {
     memcpy(pdrIdPtr, &pdrId, sizeof(uint16_t));
     ListAppend(&session->pdrIdList, pdrIdPtr);
     // Set buff relate pdr to session
-    //UpfBufPacketAdd(session, pdrId);
+    UpfBufPacketAdd(session, pdrId);
 
     return STATUS_OK;
 }
@@ -265,6 +266,12 @@ Status UpfN4HandleCreateFar(CreateFAR *createFar) {
     // Apply Action
     uint8_t applyAction = *((uint8_t *)(createFar->applyAction.value));
     gtp5g_far_set_apply_action(tmpFar, applyAction);
+    // apply action only 1 byte, no need to ntohs()
+    /*
+    if (applyAction & PFCP_FAR_APPLY_ACTION_BUFF && pdr) {
+        gtp5g_pdr_set_unix_sock_path(pdr, Self()->buffSockPath);
+    }
+    */
 
     // Forwarding Parameters
     if (createFar->forwardingParameters.presence) {
@@ -394,8 +401,14 @@ Status UpfN4HandleUpdateFar(UpdateFAR *updateFar) {
 
     // update Apply Action
     if (updateFar->applyAction.presence) {
-        gtp5g_far_set_apply_action(tmpFar,
-                                   *(uint8_t*)updateFar->applyAction.value);
+        uint8_t applyAction = *(uint8_t*)updateFar->applyAction.value;
+        gtp5g_far_set_apply_action(tmpFar, applyAction);
+        // apply action only 1 byte, no need to ntohs()
+        /*
+        if (applyAction & PFCP_FAR_APPLY_ACTION_BUFF) {
+
+        }
+        */
     }
     // update Forwarding parameters
     if (updateFar->updateForwardingParameters.outerHeaderCreation.value) {
@@ -448,8 +461,8 @@ Status UpfN4HandleRemovePdr(UpfSession *session, uint16_t pdrId) {
             // Remove PDR ID from session
             ListRemove(&session->pdrIdList, sessionPdrIdPtr);
             // Remove buff
-            //UpfBufPacket *tmpBufPacket = UpfBufPacketFindByPdrId(pdrId);
-            //UpfBufPacketRemove(tmpBufPacket);
+            UpfBufPacket *tmpBufPacket = UpfBufPacketFindByPdrId(pdrId);
+            UpfBufPacketRemove(tmpBufPacket);
             return STATUS_OK;
         }
 

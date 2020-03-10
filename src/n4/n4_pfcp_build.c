@@ -143,7 +143,8 @@ Status UpfN4BuildSessionReportRequestDownlinkDataReport(Bufblk **bufBlkPtr,
     downlinkDataReport->presence = 1;
 
     downlinkDataReport->pDRID.presence = 1;
-    pdrId = htons(pdrId);
+    // This value is store in network type
+    pdrId = pdrId;
     downlinkDataReport->pDRID.value = &pdrId;
     downlinkDataReport->pDRID.len = sizeof(pdrId);
     // not support yet, TODO

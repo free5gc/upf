@@ -68,10 +68,6 @@ Status UpfContextInit() {
     ListInit(&self.qerList);
     ListInit(&self.urrList);
 
-    // Init buffer used UpfBufPacket
-    // Instead of list version, use hash function as below
-    //ListInit(&self.bufPacket); // UpfBufPacket
-
     self.recoveryTime = htonl(time((time_t *)NULL));
 
     // Set Default Value
@@ -90,8 +86,13 @@ Status UpfContextInit() {
     PfcpNodeInit(); // init pfcp node for upfN4List (it will used pfcp node)
     TimerListInit(&self.timerServiceList);
 
+    // TODO: Read from config
+    strncpy(self.buffSockPath, "/tmp/free5gc_unix_sock", MAX_SOCK_PATH_LEN);
     self.sessionHash = HashMake();
-    //self.bufPacketHash = HashMake();
+    self.bufPacketHash = HashMake();
+    // spin lock protect write data instead of mutex protect code block
+    int ret = pthread_spin_init(&self.buffLock, PTHREAD_PROCESS_PRIVATE);
+    UTLT_Assert(ret == 0, , "buffLock cannot create: %s", strerror(ret));
 
     upfContextInitialized = 1;
 
@@ -105,12 +106,14 @@ Status UpfContextTerminate() {
 
     Status status = STATUS_OK;
 
-    UpfSessionRemoveAll();
+    int ret = pthread_spin_destroy(&self.buffLock);
+    UTLT_Assert(ret == 0, , "buffLock cannot destroy: %s", strerror(ret));
+    UTLT_Assert(self.bufPacketHash, , "Buffer Hash Table missing?!");
+    HashDestroy(self.bufPacketHash);
 
+    UpfSessionRemoveAll();
     UTLT_Assert(self.sessionHash, , "Session Hash Table missing?!");
     HashDestroy(self.sessionHash);
-    //UTLT_Assert(self.bufPacketHash, , "Buffer Hash Table missing?!");
-    //HashDestroy(self.bufPacketHash);
 
     // Terminate resource
     IndexTerminate(&upfBarPool);
@@ -135,7 +138,7 @@ Status UpfContextTerminate() {
 
     return status;
 }
-/*
+
 HashIndex *UpfBufPacketFirst() {
     UTLT_Assert(self.bufPacketHash, return NULL, "");
     return HashFirst(self.bufPacketHash);
@@ -165,6 +168,7 @@ UpfBufPacket *UpfBufPacketAdd(const UpfSession * const session,
     UTLT_Assert(newBufPacket, return NULL, "Allocate new slot error");
     newBufPacket->sessionPtr = session;
     newBufPacket->pdrId = pdrId;
+    newBufPacket->packetBuffer = NULL;
 
     HashSet(self.bufPacketHash, &newBufPacket->pdrId,
             sizeof(uint16_t), newBufPacket);
@@ -217,7 +221,6 @@ Status UpfBufPacketRemoveAll() {
 
     return STATUS_OK;
 }
-*/
 
 /**
  * @param  *natifname: nullable
@@ -346,10 +349,6 @@ UpfSession *UpfSessionAdd(PfcpUeIpAddr *ueIp, uint8_t *apn,
     HashSet(self.sessionHash, session->hashKey,
             session->hashKeylen, session);
 
-    /* initial the session's packIdx to 0 */
-    session->pktBufIdx = 0;
-    pthread_mutex_init(&session->bufLock, 0);
-
     return session;
 }
 
@@ -358,7 +357,6 @@ Status UpfSessionRemove(UpfSession *session) {
                 "sessionHash error");
     UTLT_Assert(session, return STATUS_ERROR, "session error");
 
-    pthread_mutex_destroy(&session->bufLock);
     HashSet(self.sessionHash, session->hashKey,
             session->hashKeylen, NULL);
 

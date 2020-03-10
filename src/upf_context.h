@@ -98,7 +98,16 @@ typedef struct {
     // Session : hash(IMSI+APN)
     Hash            *sessionHash;
     // Save buffer packet here
-    //Hash            *bufPacketHash;
+    Hash            *bufPacketHash;
+    // Use spin lock to protect data write
+    pthread_spinlock_t buffLock;
+    // TODO: read from config
+    // no reason, just want to bigger than /tmp/free5gc_unix_sock
+#define MAX_SOCK_PATH_LEN 64
+    char            buffSockPath[MAX_SOCK_PATH_LEN];
+    // Buffering socket for recv packet from kernel
+    Sock            *buffSock;
+
 
     // Config file
     const char      *configFilePath;
@@ -136,11 +145,6 @@ typedef struct _UpfSession {
     PfcpNode        *pfcpNode;
     ListNode        pdrIdList;
 
-    /* Buff the un-tunnel packet */
-#define MAX_NUM_OF_PACKET_BUFFER_SIZE 0xff
-    int             pktBufIdx;
-    Bufblk          *packetBuffer[MAX_NUM_OF_PACKET_BUFFER_SIZE];
-    pthread_mutex_t bufLock;
 } UpfSession;
 
 // Used for buffering, Index type for each PDR

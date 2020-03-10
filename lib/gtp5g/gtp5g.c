@@ -855,7 +855,7 @@ pr_info("Enter gtp5g_buf_skb_ipv4\n");
     if (unix_sock_send(pdr, skb->data, skb_headlen(skb)) < 0)
         rt = -EBADMSG;
     
-    dev_kfree_skb(skb);
+    //dev_kfree_skb(skb);
 pr_info("Exit gtp5g_buf_skb_ipv4\n");
     return rt;
 }

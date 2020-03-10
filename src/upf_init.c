@@ -16,13 +16,9 @@
 #include "gtp_buffer.h"
 #include "upf_context.h"
 #include "upf_config.h"
-#include "up/up_gtp_path.h"
+#include "up/up_path.h"
 #include "n4/n4_pfcp_path.h"
 #include "pfcp_xact.h"
-
-// TODO: Sample for buffer, must be modify
-static Sock *sockForBufferTest;
-#define PATH_FOR_BUFFER "/tmp/free5gc_unix_sock"
 
 static Status SignalRegister();
 static void SignalHandler(int sigval);
@@ -72,13 +68,10 @@ Status UpfInit(char *configPath) {
                           UPF_EVENT_N4_T3_HOLDING); // init pfcp xact context
     if (status != STATUS_OK) return status;
 
-    status = GtpRouteInit();
+    status = UpRouteInit();
     if (status != STATUS_OK) return status;
 
-    // TODO: Sample for buffer, must be modify
-    sockForBufferTest = BufferServerCreate(SOCK_DGRAM, PATH_FOR_BUFFER, BufferHandler, NULL);
-    UTLT_Assert(sockForBufferTest, return STATUS_ERROR, "");
-    status = BufferEpollRegister(Self()->epfd, sockForBufferTest);
+    status = BufferServerInit();
     if (status != STATUS_OK) return status;
 
     UTLT_Info("UPF initialized");
@@ -91,13 +84,10 @@ Status UpfTerminate() {
 
     UTLT_Info("Terminating UPF...");
 
-    // TODO: Sample for buffer, must be modify
-    UTLT_Assert(BufferEpollDeregister(Self()->epfd, sockForBufferTest) == STATUS_OK, status |= STATUS_ERROR,
-                "Buffer server epoll deregister failed")
-    UTLT_Assert(BufferServerFree(sockForBufferTest) == STATUS_OK, status |= STATUS_ERROR,
-                "Buffer server terminate failed");
+    UTLT_Assert(BufferServerTerminate() == STATUS_OK, status |= STATUS_ERROR,
+                "Buffer Sock resource free failed");
 
-    UTLT_Assert(GtpRouteTerminate() == STATUS_OK, status |= STATUS_ERROR,
+    UTLT_Assert(UpRouteTerminate() == STATUS_OK, status |= STATUS_ERROR,
                 "GTP routes removal failed");
 
     UTLT_Assert(PfcpXactTerminate() == STATUS_OK, status |= STATUS_ERROR,

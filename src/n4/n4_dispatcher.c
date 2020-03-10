@@ -15,21 +15,21 @@ void UpfDispatcher(const Event *event) {
         Bufblk *bufBlk = NULL;
         PfcpXact *xact = NULL;
 
-        uint64_t *seid = (uint64_t*)event->arg0;
-        uint16_t *pdrId = (uint16_t*)event->arg1;
+        uint64_t seid = (uint64_t)event->arg0;
+        uint16_t pdrId = (uint16_t)event->arg1;
 
-        UpfSession *session = UpfSessionFindBySeid(*seid);
+        UpfSession *session = UpfSessionFindBySeid(seid);
         UTLT_Assert(session != NULL, return,
-                    "Session not find by seid: %d", *seid);
+                    "Session not find by seid: %d", seid);
 
         memset(&header, 0, sizeof(PfcpHeader));
         header.type = PFCP_SESSION_REPORT_REQUEST;
-        header.seid = *seid;
+        header.seid = seid;
 
         status = UpfN4BuildSessionReportRequestDownlinkDataReport(&bufBlk,
                                                                   header.type,
                                                                   session,
-                                                                  *pdrId);
+                                                                  pdrId);
         UTLT_Assert(status == STATUS_OK, return,
                     "Build Session Report Request error");
 

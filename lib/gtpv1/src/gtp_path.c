@@ -135,24 +135,34 @@ Status GtpDevListCreate(int epfd, int domain, ListNode *sockList,
                         SockHandler handler, void *data) {
     UTLT_Assert(sockList, return STATUS_ERROR, "Socket List is NULL");
 
-    for (Gtpv1TunDevNode *it = ListFirst(sockList); it != NULL; it = ListNext(it)) {
-        UTLT_Assert(GtpTunCreate(it, handler, data) == STATUS_OK, return STATUS_ERROR,
-                    "GTPv1 tunnel create fail : IP[%s], ifname[%s]", it->ip, it->ifname);
-        UTLT_Assert(GtpEpollRegister(epfd, it->sock) == STATUS_OK, return STATUS_ERROR,
+    for (Gtpv1TunDevNode *it = ListFirst(sockList); it != NULL;
+         it = ListNext(it)) {
+        Status status;
+        status = GtpTunCreate(it, handler, data);
+        UTLT_Assert(status == STATUS_OK, return STATUS_ERROR,
+                    "GTPv1 tunnel create fail : IP[%s], ifname[%s]",
+                    it->ip, it->ifname);
+
+        status = GtpEpollRegister(epfd, it->sock);
+        UTLT_Assert(status == STATUS_OK, return STATUS_ERROR,
                     "GTPv1 tunnel register to epoll fail : IP[%s]", it->ip)
     }
 
     return STATUS_OK;
 }
 
-Status GtpTunListFree(int epfd, ListNode *sockList) {
+Status GtpDevListFree(int epfd, ListNode *sockList) {
     UTLT_Assert(sockList, return STATUS_ERROR, "Socket List is NULL");
     Status status = STATUS_OK;
 
-    for (Gtpv1TunDevNode *it = ListFirst(sockList); it != NULL; it = ListNext(it)) {
-        UTLT_Assert(GtpEpollDeregister(epfd, it->sock) == STATUS_OK, status |= STATUS_ERROR,
+    for (Gtpv1TunDevNode *it = ListFirst(sockList); it != NULL;
+         it = ListNext(it)) {
+        status = GtpEpollDeregister(epfd, it->sock);
+        UTLT_Assert(status == STATUS_OK, status |= STATUS_ERROR,
                     "GTPv1 tunnel deregister to epoll fail : IP[%s]", it->ip);
-        UTLT_Assert(GtpTunFree(it) == STATUS_OK, status |= STATUS_ERROR,
+
+        status = GtpTunFree(it);
+        UTLT_Assert(status == STATUS_OK, status |= STATUS_ERROR,
                     "GTPv1 tunnel free fail : IP[%s]", it->ip);
     }
 
