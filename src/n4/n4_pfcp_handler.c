@@ -266,12 +266,6 @@ Status UpfN4HandleCreateFar(CreateFAR *createFar) {
     // Apply Action
     uint8_t applyAction = *((uint8_t *)(createFar->applyAction.value));
     gtp5g_far_set_apply_action(tmpFar, applyAction);
-    // apply action only 1 byte, no need to ntohs()
-    /*
-    if (applyAction & PFCP_FAR_APPLY_ACTION_BUFF && pdr) {
-        gtp5g_pdr_set_unix_sock_path(pdr, Self()->buffSockPath);
-    }
-    */
 
     // Forwarding Parameters
     if (createFar->forwardingParameters.presence) {
@@ -325,12 +319,17 @@ Status UpfN4HandleUpdatePdr(UpdatePDR *updatePdr) {
     // Find PDR
     uint16_t pdrId = *((uint16_t*)updatePdr->pDRID.value);
 
+    /*
     Gtpv1TunDevNode *gtpv1Dev4 =
         (Gtpv1TunDevNode*)ListFirst(&Self()->gtpv1DevList);
     UTLT_Assert(gtpv1Dev4, return STATUS_ERROR, "No GTP Device");
     tmpPdr = GtpTunnelFindPdrById(gtpv1Dev4->ifname, pdrId);
     UTLT_Assert(tmpPdr, return STATUS_ERROR,
                 "[PFCP] UpdatePDR PDR[%u] not found", ntohs(pdrId));
+    */
+    tmpPdr = gtp5g_pdr_alloc();
+    UTLT_Assert(tmpPdr, return STATUS_ERROR, "pdr alloc error");
+    gtp5g_pdr_set_id(tmpPdr, pdrId);
 
     // TODO: other IE of update PDR
     if (updatePdr->outerHeaderRemoval.presence) {
@@ -388,27 +387,31 @@ Status UpfN4HandleUpdateFar(UpdateFAR *updateFar) {
     UTLT_Assert(updateFar->fARID.presence,
                 return STATUS_ERROR, "Far ID not presence");
 
+    // Record if need to send buffer
+    uint8_t sendBufMarker = 0;
     // Find FAR
     uint32_t farId = *((uint32_t *)updateFar->fARID.value);
-
 
     Gtpv1TunDevNode *gtpv1Dev4 =
         (Gtpv1TunDevNode*)ListFirst(&Self()->gtpv1DevList);
     UTLT_Assert(gtpv1Dev4, return STATUS_ERROR, "No GTP Device");
-    tmpFar = GtpTunnelFindFarById(gtpv1Dev4->ifname, farId);
-    UTLT_Assert(tmpFar, return STATUS_ERROR,
+    UpfFar *oldFar = GtpTunnelFindFarById(gtpv1Dev4->ifname, farId);
+    UTLT_Assert(oldFar, return STATUS_ERROR,
                 "[PFCP] UpdateFAR FAR[%u] not found", ntohl(farId));
+
+    // Create been updated far
+    tmpFar = gtp5g_far_alloc();
+    UTLT_Assert(tmpFar, return STATUS_ERROR, "FAR allocate error");
+    gtp5g_far_set_id(tmpFar, farId);
 
     // update Apply Action
     if (updateFar->applyAction.presence) {
         uint8_t applyAction = *(uint8_t*)updateFar->applyAction.value;
         gtp5g_far_set_apply_action(tmpFar, applyAction);
-        // apply action only 1 byte, no need to ntohs()
-        /*
-        if (applyAction & PFCP_FAR_APPLY_ACTION_BUFF) {
-
+        if ((applyAction & PFCP_FAR_APPLY_ACTION_FORW)) {
+            //(*gtp5g_far_get_apply_action(oldFar) & PFCP_FAR_APPLY_ACTION_BUFF)) {
+            sendBufMarker = 1;
         }
-        */
     }
     // update Forwarding parameters
     if (updateFar->updateForwardingParameters.outerHeaderCreation.value) {
@@ -438,6 +441,41 @@ Status UpfN4HandleUpdateFar(UpdateFAR *updateFar) {
     gtp5g_far_free(tmpFar);
     UTLT_Assert(tmpFar != NULL, return STATUS_ERROR,
                 "Free FAR struct error");
+    gtp5g_far_free(oldFar);
+    UTLT_Assert(oldFar != NULL, return STATUS_ERROR,
+                "Free FAR struct error");
+
+    // Send buffer if need
+    // Send here because I'm not sure updateFar will update forwarding
+    // parameter or not
+    if (sendBufMarker) {
+        UpfFar *newFar = GtpTunnelFindFarById(gtpv1Dev4->ifname, farId);
+        UTLT_Assert(newFar, return STATUS_ERROR,
+                    "[PFCP] UpdateFAR FAR[%u] not found", ntohl(farId));
+        // Check if pdr Packet full of packet
+        int pdrNum = *gtp5g_far_get_related_pdr_num(newFar);
+        uint16_t *pdrIdList = gtp5g_far_get_related_pdr_list(newFar);
+        // Send buffer back to Gtp Dev
+        Sock *sock = ((Gtpv1TunDevNode*)
+                        ListFirst(&Self()->gtpv1DevList))->sock;
+        sock->remoteAddr._family = sock->localAddr._family;
+        sock->remoteAddr._port = sock->localAddr._port;
+        if (sock->localAddr._family == AF_INET) {
+            sock->remoteAddr.s4.sin_addr =
+                *gtp5g_far_get_outer_header_creation_peer_addr_ipv4(newFar);
+        } else {
+            // TODO: IPv6
+        }
+
+        for (size_t idx = 0; idx < pdrNum; ++idx) {
+            UpSendPacketByPdrFar(pdrIdList[idx], newFar, sock);
+        }
+        // FIXME: free pdrIdList
+
+        gtp5g_far_free(newFar);
+        UTLT_Assert(newFar != NULL, return STATUS_ERROR,
+                    "Free FAR struct error");
+    }
 
     return STATUS_OK;
 }
@@ -507,6 +545,7 @@ Status UpfN4HandleRemoveFar(uint32_t farId) {
         UTLT_Assert(tmpPdr != NULL, continue,
                     "Free pdr error");
     }
+    // FIXME: free pdrList
 
     Status status = _pushFarToKernel(far, _FAR_DEL);
     UTLT_Assert(status == STATUS_OK, return STATUS_ERROR,

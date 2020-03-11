@@ -3,6 +3,7 @@
 
 #include "utlt_debug.h"
 #include "utlt_network.h"
+#include "upf_context.h"
 
 Status UpRouteInit();
 Status UpRouteTerminate();
@@ -19,5 +20,7 @@ Status GtpHandleEndMark(Sock *sock, void *data);
 Status BufferServerInit();
 Status BufferServerTerminate();
 Status BufferHandler(Sock *sock, void *data);
+
+Status UpSendPacketByPdrFar(uint16_t pdrId, UpfFar *far, Sock *sock);
 
 #endif /* __UP_PATH_H_ */

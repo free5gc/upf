@@ -19,6 +19,7 @@
 #include "gtp_path.h"
 #include "gtp_header.h"
 #include "gtp_buffer.h"
+#include "gtp_tunnel.h"
 
 Status UpRouteInit() {
     Status status;
@@ -298,4 +299,52 @@ Status BufferHandler(Sock *sock, void *data) {
 ERROR_AND_FREE:
     UTLT_Assert(BufblkFree(pktbuf) == STATUS_OK, , "Bufblk free fail");
     return STATUS_ERROR;
+}
+
+Status UpSendPacketByPdrFar(uint16_t pdrId, UpfFar *far, Sock *sock) {
+    UTLT_Assert(far, return STATUS_ERROR, "Far error");
+    UTLT_Assert(sock, return STATUS_ERROR, "Send packet sock error");
+
+    Gtpv1TunDevNode *gtpv1Dev4 =
+        (Gtpv1TunDevNode*)ListFirst(&Self()->gtpv1DevList);
+    UTLT_Assert(gtpv1Dev4, return STATUS_ERROR, "No GTP Device");
+
+    UpfPdr *pdr = GtpTunnelFindPdrById(gtpv1Dev4->ifname, pdrId);
+    UTLT_Assert(pdr, return STATUS_ERROR, "Cannot find PDR[%u]", ntohs(pdrId));
+
+    Gtpv1Header gtpHdr = {
+        //.version = 1,
+        .type = GTPV1_T_PDU,
+        ._teid = *gtp5g_pdr_get_id(pdr),
+    };
+
+    gtp5g_pdr_free(pdr);
+    UTLT_Assert(pdr != NULL, return STATUS_ERROR, "PDR free failed");
+
+    Status status = STATUS_OK;
+    UpfBufPacket *bufStorage = UpfBufPacketFindByPdrId(pdrId);
+    if (bufStorage->packetBuffer) {
+        UTLT_Assert(!pthread_spin_lock(&Self()->buffLock), return STATUS_ERROR,
+                    "spin lock buffLock error");
+
+        Bufblk *sendBuf = BufblkAlloc(1, 0x40);
+        gtpHdr._length = htons(bufStorage->packetBuffer->len);
+        BufblkBytes(sendBuf, (void*)&gtpHdr, GTPV1_HEADER_LEN);
+        BufblkBuf(sendBuf, bufStorage->packetBuffer);
+
+        status = GtpSend(sock, bufStorage->packetBuffer);
+        UTLT_Assert(status == STATUS_OK, return status, "GtpSend failed");
+        BufblkClear(sendBuf);
+
+        while (pthread_spin_unlock(&Self()->buffLock)) {
+            // if unlock failed, keep trying
+            UTLT_Error("spin unlock error");
+        }
+    }
+    status = BufblkFree(bufStorage->packetBuffer);
+    UTLT_Assert(status == STATUS_OK, return status,
+                "Free packet buffer failed");
+    bufStorage->packetBuffer = NULL;
+
+    return status;
 }
