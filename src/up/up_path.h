@@ -21,6 +21,6 @@ Status BufferServerInit();
 Status BufferServerTerminate();
 Status BufferHandler(Sock *sock, void *data);
 
-Status UpSendPacketByPdrFar(uint16_t pdrId, UpfFar *far, Sock *sock);
+Status UpSendPacketByPdrFar(UpfPdr *pdr, UpfFar *far, Sock *sock);
 
 #endif /* __UP_PATH_H_ */

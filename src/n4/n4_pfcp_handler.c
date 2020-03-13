@@ -334,7 +334,7 @@ Status UpfN4HandleUpdatePdr(UpdatePDR *updatePdr) {
     // TODO: other IE of update PDR
     if (updatePdr->outerHeaderRemoval.presence) {
         gtp5g_pdr_set_outer_header_removal(tmpPdr,
-                                           *((uint8_t*)(updatePdr->outerHeaderRemoval.value)));
+            *((uint8_t*)(updatePdr->outerHeaderRemoval.value)));
     }
     if (updatePdr->precedence.presence) {
         gtp5g_pdr_set_precedence(tmpPdr,
@@ -395,7 +395,9 @@ Status UpfN4HandleUpdateFar(UpdateFAR *updateFar) {
     Gtpv1TunDevNode *gtpv1Dev4 =
         (Gtpv1TunDevNode*)ListFirst(&Self()->gtpv1DevList);
     UTLT_Assert(gtpv1Dev4, return STATUS_ERROR, "No GTP Device");
-    UpfFar *oldFar = GtpTunnelFindFarById(gtpv1Dev4->ifname, farId);
+    char *gtpIfname = gtpv1Dev4->ifname;
+
+    UpfFar *oldFar = GtpTunnelFindFarById(gtpIfname, farId);
     UTLT_Assert(oldFar, return STATUS_ERROR,
                 "[PFCP] UpdateFAR FAR[%u] not found", ntohl(farId));
 
@@ -449,7 +451,7 @@ Status UpfN4HandleUpdateFar(UpdateFAR *updateFar) {
     // Send here because I'm not sure updateFar will update forwarding
     // parameter or not
     if (sendBufMarker) {
-        UpfFar *newFar = GtpTunnelFindFarById(gtpv1Dev4->ifname, farId);
+        UpfFar *newFar = GtpTunnelFindFarById(gtpIfname, farId);
         UTLT_Assert(newFar, return STATUS_ERROR,
                     "[PFCP] UpdateFAR FAR[%u] not found", ntohl(farId));
         // Check if pdr Packet full of packet
@@ -468,7 +470,11 @@ Status UpfN4HandleUpdateFar(UpdateFAR *updateFar) {
         }
 
         for (size_t idx = 0; idx < pdrNum; ++idx) {
-            UpSendPacketByPdrFar(pdrIdList[idx], newFar, sock);
+            UpfPdr *tmpPdr = GtpTunnelFindPdrById(gtpIfname, pdrIdList[idx]);
+            UpSendPacketByPdrFar(tmpPdr, newFar, sock);
+            gtp5g_pdr_free(tmpPdr);
+            UTLT_Assert(tmpPdr != NULL, return STATUS_ERROR,
+                        "Free PDR struct error");
         }
         // FIXME: free pdrIdList
 
