@@ -28,7 +28,6 @@ Status GtpServerFree(Sock *sock) {
     UTLT_Assert(SockUnregister(sock) == STATUS_OK, status |= STATUS_ERROR,
                 "GTP socket unregister fail");
 
-    status = UdpFree(sock);
     UTLT_Assert(UdpFree(sock) == STATUS_OK, status |= STATUS_ERROR,
                 "GTP socket free fail");
 
@@ -49,7 +48,7 @@ Status GtpTunCreate(Gtpv1TunDevNode *node, SockHandler handler, void *data) {
     status = GtpLinkCreate(node);
     UTLT_Assert(status == STATUS_OK, return STATUS_ERROR, "GtpLinkCreate fail");
 
-    status = SockRegister(node->sock1, handler, data);
+    status = SockRegister(node->sock, handler, data);
     if (status != STATUS_OK) {
         status = GtpLinkFree(node);
         UTLT_Assert(status == STATUS_OK, , "GtpLinkFree fail");
@@ -64,7 +63,7 @@ Status GtpTunFree(Gtpv1TunDevNode *node) {
                 "GTPv1 tunnel node is NULL");
     Status status = STATUS_OK;
 
-    UTLT_Assert(SockUnregister(node->sock1) == STATUS_OK, status |= STATUS_ERROR,
+    UTLT_Assert(SockUnregister(node->sock) == STATUS_OK, status |= STATUS_ERROR,
                 "GTP tunnel socket unregister fail");
 
     UTLT_Assert(GtpLinkFree(node) == STATUS_OK, status |= STATUS_ERROR,
@@ -77,7 +76,7 @@ int GtpRecv(Sock *sock, Bufblk *pktbuf) {
     UTLT_Assert(sock && pktbuf, return -1, "Socket or pktbuf pointer is NULL");
 
     if (pktbuf->size != MAX_OF_GTPV1_PACKET_SIZE) {
-        UTLT_Assert(BufblkResize(pktbuf, 1, MAX_OF_GTPV1_PACKET_SIZE),
+        UTLT_Assert(BufblkResize(pktbuf, 1, MAX_OF_GTPV1_PACKET_SIZE) == STATUS_OK,
                     return -1, "Buffer is not enough");
     }
 
@@ -136,24 +135,34 @@ Status GtpDevListCreate(int epfd, int domain, ListNode *sockList,
                         SockHandler handler, void *data) {
     UTLT_Assert(sockList, return STATUS_ERROR, "Socket List is NULL");
 
-    for (Gtpv1TunDevNode *it = ListFirst(sockList); it != NULL; it = ListNext(it)) {
-        UTLT_Assert(GtpTunCreate(it, handler, data) == STATUS_OK, return STATUS_ERROR,
-                    "GTPv1 tunnel create fail : IP[%s], ifname[%s]", it->ip, it->ifname);
-        UTLT_Assert(GtpEpollRegister(epfd, it->sock1) == STATUS_OK, return STATUS_ERROR,
+    for (Gtpv1TunDevNode *it = ListFirst(sockList); it != NULL;
+         it = ListNext(it)) {
+        Status status;
+        status = GtpTunCreate(it, handler, data);
+        UTLT_Assert(status == STATUS_OK, return STATUS_ERROR,
+                    "GTPv1 tunnel create fail : IP[%s], ifname[%s]",
+                    it->ip, it->ifname);
+
+        status = GtpEpollRegister(epfd, it->sock);
+        UTLT_Assert(status == STATUS_OK, return STATUS_ERROR,
                     "GTPv1 tunnel register to epoll fail : IP[%s]", it->ip)
     }
 
     return STATUS_OK;
 }
 
-Status GtpTunListFree(int epfd, ListNode *sockList) {
+Status GtpDevListFree(int epfd, ListNode *sockList) {
     UTLT_Assert(sockList, return STATUS_ERROR, "Socket List is NULL");
     Status status = STATUS_OK;
 
-    for (Gtpv1TunDevNode *it = ListFirst(sockList); it != NULL; it = ListNext(it)) {
-        UTLT_Assert(GtpEpollDeregister(epfd, it->sock1) == STATUS_OK, status |= STATUS_ERROR,
+    for (Gtpv1TunDevNode *it = ListFirst(sockList); it != NULL;
+         it = ListNext(it)) {
+        status = GtpEpollDeregister(epfd, it->sock);
+        UTLT_Assert(status == STATUS_OK, status |= STATUS_ERROR,
                     "GTPv1 tunnel deregister to epoll fail : IP[%s]", it->ip);
-        UTLT_Assert(GtpTunFree(it) == STATUS_OK, status |= STATUS_ERROR,
+
+        status = GtpTunFree(it);
+        UTLT_Assert(status == STATUS_OK, status |= STATUS_ERROR,
                     "GTPv1 tunnel free fail : IP[%s]", it->ip);
     }
 
@@ -220,16 +229,14 @@ Status GtpBuildEchoRequest(Bufblk *pktbuf, int teid, int seq) {
     UTLT_Assert(pktbuf, return STATUS_ERROR, "Packet buffer is NULL");
 
     Gtpv1Header gtpEchoReqHdr = {
-        .version = 1,
-        .PT = 1,
-        .seqFlag = 1,
+        .flags = 0x32,
         .type = GTPV1_ECHO_REQUEST,
         ._length = htons(GTPV1_OPT_HEADER_LEN),
         ._teid = htonl(teid),
     };
     BufblkBytes(pktbuf, (void *) &gtpEchoReqHdr, GTPV1_HEADER_LEN);
 
-    Gtp1OptHeader gtpOptHdr = {
+    Gtpv1OptHeader gtpOptHdr = {
         ._seqNum = htons(seq),
     };
     BufblkBytes(pktbuf, (void *) &gtpOptHdr, GTPV1_OPT_HEADER_LEN);
@@ -241,7 +248,7 @@ Status GtpBuildEndMark(Bufblk *pktbuf, int teid) {
     UTLT_Assert(pktbuf, return STATUS_ERROR, "Packet buffer is NULL");
 
     Gtpv1Header gtpEndMarkHdr = {
-        .version = 1,
+        .flags = 0x20,
         .type = GTPV1_END_MARK,
         ._teid = htonl(teid),
     };

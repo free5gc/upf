@@ -130,13 +130,19 @@ int SockBind(Sock *sock, SockAddr *sockAddr) {
     Status status;
     UTLT_Assert(sock && sockAddr, return STATUS_ERROR, "")
 
-    status = bind(sock->fd, &(sockAddr->sa), SockAddrLen(sockAddr));
-    UTLT_Assert(status == STATUS_OK, return STATUS_ERROR, 
-                "Socket bind fail : %s", strerror(errno));
+    switch (sockAddr->_family) {
+        case AF_UNIX:
+            UTLT_Assert(bind(sock->fd, &(sockAddr->sa), SockAddrLen(sockAddr)) >= 0,
+                        return STATUS_ERROR,
+                        "Unix socket bind fail : %s", strerror(errno));
+            break;
+        default:
+            status = bind(sock->fd, &(sockAddr->sa), SockAddrLen(sockAddr));
+            UTLT_Assert(status == STATUS_OK, return STATUS_ERROR, 
+                        "Socket bind fail : %s", strerror(errno));
+    }
 
     memcpy(&sock->localAddr, sockAddr, SockAddrLen(sockAddr));
-
-//    UTLT_Trace("Socket Bind : ip = %s, port = %d", GetIP(&sock->localAddr), GetPort(&sock->localAddr));
 
     return STATUS_OK;
 }

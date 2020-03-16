@@ -34,6 +34,7 @@ int UTLT_LogPrint(int level, const char *filename, const int line,
     vspCnt = vsnprintf(buffer + cnt, sizeof(buffer) - cnt, fmt, vl);
     if (vspCnt < 0) {
         fprintf(stderr, "vsnprintf in UTLT_LogPrint error : %s\n", strerror(errno));
+        va_end(vl);
         return STATUS_ERROR;
     } else if (vspCnt == 0) {
         return STATUS_OK;

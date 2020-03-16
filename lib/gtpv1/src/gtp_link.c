@@ -7,30 +7,39 @@
 
 #include "utlt_network.h"
 #include "utlt_pool.h"
-#include "libgtpnl/gtpnl.h"
+#include "libgtp5gnl/gtp5gnl.h"
 #include "linux/genetlink.h"
-#include "linux/gtp.h"
-#include "libgtpnl/gtp.h"
 
 #define MAX_NUM_OF_GTPDEV 64
 
 PoolDeclare(gtpv1DevPool, Gtpv1TunDevNode, MAX_NUM_OF_GTPDEV);
 
+// TODO: Need to delete
+Status GtpTunnelAdd(const char *ifname, int iteid, int oteid, const char *destIP, const char *tunIP) {
+    return 0;
+}
+Status GtpTunnelDel(const char *ifname, int iteid) {
+    return 0;
+}
+
+Status GtpTunnelList() {
+    return 0;
+}
+
+
+
 Status GtpLinkCreate(Gtpv1TunDevNode *node) {
     UTLT_Assert(node, return STATUS_ERROR, "GTPv1 tunnel node is NULL");
     Status status;
 
-    node->sockPrime = UdpServerCreate(AF_INET, node->ip, GTP_PRIME_PORT);
-    UTLT_Assert(node->sockPrime, return STATUS_ERROR,
-                "GTP tunnel bind on NIC create fail : IP[%s] port[%d]", node->ip, GTP_PRIME_PORT);
-    node->sock1 = UdpServerCreate(AF_INET, node->ip, GTP_V1_PORT);
-    UTLT_Assert(node->sock1, return STATUS_ERROR, 
+    node->sock = UdpServerCreate(AF_INET, node->ip, GTP_V1_PORT);
+    UTLT_Assert(node->sock, return STATUS_ERROR, 
                 "GTP tunnel create fail : IP[%s] port[%d]", node->ip, GTP_V1_PORT);
 
-    status = gtp_dev_create(-1, node->ifname, node->sockPrime->fd, node->sock1->fd);
+    status = gtp_dev_create(-1, node->ifname, node->sock->fd);
     UTLT_Assert(status == STATUS_OK, return STATUS_ERROR,
                 "GTP device named %s Create fail", node->ifname);
-    
+
     UTLT_Trace("GTP device create success : IP[%s], port[%d], ifname[%s]",
                node->ip, GTP_V1_PORT, node->ifname);
 
@@ -41,10 +50,8 @@ Status GtpLinkFree(Gtpv1TunDevNode *node) {
     UTLT_Assert(node, return STATUS_ERROR, "GTPv1 tunnel node is NULL");
     Status status = STATUS_OK;
 
-    UTLT_Assert(UdpFree(node->sock1) == STATUS_OK, status |= STATUS_ERROR,
+    UTLT_Assert(UdpFree(node->sock) == STATUS_OK, status |= STATUS_ERROR,
                 "GTPv1 tunnel socket free fail : IP[%s]", node->ip);
-    UTLT_Assert(UdpFree(node->sockPrime) == STATUS_OK, status |= STATUS_ERROR,
-                "GTP Prime tunnel socket free fail : IP[%s]", node->ip);
 
     UTLT_Assert(gtp_dev_destroy(node->ifname) >= 0, status |= STATUS_ERROR,
                 "GTP device destroy fail");
@@ -54,82 +61,27 @@ Status GtpLinkFree(Gtpv1TunDevNode *node) {
     return status;
 }
 
-#define FreeGtpSockAndTunnel(__nl, __tun) gtp_tunnel_free(__tun); genl_socket_close(__nl)
+Status NetlinkSockOpen(NetlinkInfo *info, const char *ifname, const char *family_name) {
+    UTLT_Assert(info, return STATUS_ERROR, "NetlinkInfo is NULL");
 
-Status GtpTunnelAdd(const char *ifname, int iteid, int oteid, const char *destIP, const char *tunIP) {
-    struct in_addr ms, sgsn;
+    info->nl = genl_socket_open();
+    UTLT_Assert(info->nl, return STATUS_ERROR, "genl_socket_open fail");
 
-    struct mnl_socket *nl = genl_socket_open();
-    UTLT_Assert(nl, return STATUS_ERROR, "genl_socket_open fail");
+    info->genl_id = genl_lookup_family(info->nl, family_name);
+    UTLT_Assert(info->genl_id >= 0, goto err, "Not found gtp5g genl family");
 
-    int genl_id = genl_lookup_family(nl, "gtp");
-    UTLT_Assert(genl_id >= 0, genl_socket_close(nl); return STATUS_ERROR, 
-                "Not found GTP genl family");
-   
-    struct gtp_tunnel *t = gtp_tunnel_alloc();
-
-    uint32_t gtp_ifidx = if_nametoindex(ifname);
-    UTLT_Assert(gtp_ifidx, FreeGtpSockAndTunnel(nl, t); return STATUS_ERROR,
-                "Wrong GTP interface %s", ifname);
-
-    gtp_tunnel_set_ifidx(t, gtp_ifidx);
-    gtp_tunnel_set_version(t, GTP_V1);
-    gtp_tunnel_set_i_tei(t, iteid);
-    gtp_tunnel_set_o_tei(t, oteid);
-
-    UTLT_Assert(inet_aton(destIP, &ms) >= 0, FreeGtpSockAndTunnel(nl, t); return STATUS_ERROR,
-                "Bad Address for Destination IP");
-    gtp_tunnel_set_ms_ip4(t, &ms);
-
-    UTLT_Assert(inet_aton(tunIP, &sgsn) >= 0, FreeGtpSockAndTunnel(nl, t); return STATUS_ERROR,
-                "Bad Address for Tunnel IP");
-    gtp_tunnel_set_sgsn_ip4(t, &sgsn);
-
-    gtp_add_tunnel(genl_id, nl, t);
-
-    FreeGtpSockAndTunnel(nl, t);
-
-    return STATUS_OK;
-}
-
-Status GtpTunnelDel(const char *ifname, int iteid) {
-    struct mnl_socket *nl = genl_socket_open();
-    UTLT_Assert(nl, return STATUS_ERROR, "genl_socket_open fail");
-
-    int genl_id = genl_lookup_family(nl, "gtp");
-    UTLT_Assert(genl_id >= 0, genl_socket_close(nl); return STATUS_ERROR, 
-                "Not found GTP genl family");
-        
-    struct gtp_tunnel *t = gtp_tunnel_alloc();
-    
-    uint32_t gtp_ifidx = if_nametoindex(ifname);
-    UTLT_Assert(gtp_ifidx, FreeGtpSockAndTunnel(nl, t); return STATUS_ERROR, 
-                "Wrong GTP interface %s", ifname);
-    
-    gtp_tunnel_set_ifidx(t, gtp_ifidx);
-    gtp_tunnel_set_version(t, GTP_V1);
-    gtp_tunnel_set_i_tei(t, iteid);
-
-    gtp_del_tunnel(genl_id, nl, t);
-    
-    FreeGtpSockAndTunnel(nl, t);
+    info->ifidx = if_nametoindex(ifname);
+    UTLT_Assert(info->ifidx, goto err, "Wrong 5G GTP interface %s", ifname);
 
     return STATUS_OK;
 
+err:
+    mnl_socket_close(info->nl);
+    return STATUS_ERROR;
 }
 
-Status GtpTunnelList() {
-    struct mnl_socket *nl = genl_socket_open();
-    UTLT_Assert(nl, return STATUS_ERROR, "genl_socket_open fail");
-
-    int genl_id = genl_lookup_family(nl, "gtp");
-    UTLT_Assert(genl_id >= 0, genl_socket_close(nl); return STATUS_ERROR, 
-                "Not found GTP genl family");
-        
-    gtp_list_tunnel(genl_id, nl);
-    
-    genl_socket_close(nl);
-
+Status NetlinkSockClose(NetlinkInfo *info) {
+    mnl_socket_close(info->nl);
     return STATUS_OK;
 }
 

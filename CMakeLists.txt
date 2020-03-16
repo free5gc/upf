@@ -10,6 +10,8 @@ set(BUILD_CONFIG_DIR "${CMAKE_BINARY_DIR}/config")
 # Build paths
 set(LIBGTPNL_SRC "${CMAKE_SOURCE_DIR}/lib/libgtpnl-1.2.1")
 set(LIBGTPNL_DST "${CMAKE_BINARY_DIR}/libgtpnl")
+set(LIBGTP5GNL_SRC "${CMAKE_SOURCE_DIR}/lib/libgtp5gnl")
+set(LIBGTP5GNL_DST "${CMAKE_BINARY_DIR}/libgtp5gnl")
 set(LOGGER_SRC "${CMAKE_SOURCE_DIR}/lib/utlt/logger")
 set(LOGGER_DST "${CMAKE_BINARY_DIR}/utlt_logger")
 
@@ -31,6 +33,7 @@ add_custom_command(OUTPUT ${BUILD_CONFIG_DIR}
 add_custom_target(configs ALL DEPENDS ${BUILD_CONFIG_DIR} VERBATIM)
 
 add_compile_options(-Wall -Werror -Wno-address-of-packed-member)
+set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -g3 -O0")
 
 # Submodules
 add_subdirectory(src)

@@ -11,7 +11,7 @@ extern "C" {
 #endif /* __cplusplus */
 
 Status UpfN4BuildSessionEstablishmentResponse(
-        Bufblk **bufBlk, uint8_t type, UpfSession *session,
+        Bufblk **bufBlk, uint8_t type, UpfSession *session, uint8_t cause,
         PFCPSessionEstablishmentRequest *establishRequest);
 Status UpfN4BuildSessionModificationResponse(
         Bufblk **bufBlkPtr, uint8_t type, UpfSession *session,

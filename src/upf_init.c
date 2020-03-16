@@ -13,9 +13,10 @@
 #include "utlt_timer.h"
 #include "utlt_network.h"
 #include "gtp_path.h"
+#include "gtp_buffer.h"
 #include "upf_context.h"
 #include "upf_config.h"
-#include "up/up_gtp_path.h"
+#include "up/up_path.h"
 #include "n4/n4_pfcp_path.h"
 #include "pfcp_xact.h"
 
@@ -67,7 +68,10 @@ Status UpfInit(char *configPath) {
                           UPF_EVENT_N4_T3_HOLDING); // init pfcp xact context
     if (status != STATUS_OK) return status;
 
-    status = GtpRouteInit();
+    status = UpRouteInit();
+    if (status != STATUS_OK) return status;
+
+    status = BufferServerInit();
     if (status != STATUS_OK) return status;
 
     UTLT_Info("UPF initialized");
@@ -80,8 +84,14 @@ Status UpfTerminate() {
 
     UTLT_Info("Terminating UPF...");
 
-    UTLT_Assert(GtpRouteTerminate() == STATUS_OK, status |= STATUS_ERROR,
+    UTLT_Assert(BufferServerTerminate() == STATUS_OK, status |= STATUS_ERROR,
+                "Buffer Sock resource free failed");
+
+    UTLT_Assert(UpRouteTerminate() == STATUS_OK, status |= STATUS_ERROR,
                 "GTP routes removal failed");
+
+    UTLT_Assert(PfcpXactTerminate() == STATUS_OK, status |= STATUS_ERROR,
+                "PFCP Transaction terminate failed");
 
     UTLT_Assert(PfcpServerTerminate() == STATUS_OK, status |= STATUS_ERROR,
                 "PFCP server terminate failed");
@@ -102,9 +112,6 @@ Status UpfTerminate() {
 
     UTLT_Assert(UtltLibTerminate() == STATUS_OK, status |= STATUS_ERROR,
                 "UPF library terminate failed");
-
-    UTLT_Assert(PfcpXactTerminate() == STATUS_OK, status |= STATUS_ERROR,
-                "PFCP Transaction terminate failed");
 
     if (status == STATUS_OK)
         UTLT_Info("UPF terminated");
