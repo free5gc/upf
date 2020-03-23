@@ -12,7 +12,7 @@ clean:
 	make -C $(INCLUDE_DIR) M=$(PWD) clean
  
 install:
-	sudo modprobe udp_tunnel
-	sudo insmod $(MODULE_NAME).ko
+	modprobe udp_tunnel
+	insmod $(MODULE_NAME).ko
 uninstall:
-	sudo rmmod $(MODULE_NAME)
+	rmmod $(MODULE_NAME)
