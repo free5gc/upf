@@ -788,7 +788,7 @@ static struct rtable *ip4_find_route(struct sk_buff *skb, struct iphdr *iph,
 err_rt:
 	ip_rt_put(rt);
 err:
-	return (struct rtable *)-1L;
+	return ERR_PTR(-ENOENT);
 }
 
 static int ip_xmit(struct sk_buff *skb, struct sock *sk, struct net_device *gtp_dev) 
@@ -835,6 +835,8 @@ static int gtp5g_fwd_skb_ipv4(struct sk_buff *skb, struct net_device *dev,
     hdr_creation = pdr->far->fwd_param->hdr_creation;
     rt = ip4_find_route(skb, iph, pdr->sk, dev, 
                         pdr->role_addr_ipv4.s_addr, hdr_creation->peer_addr_ipv4.s_addr, &fl4);
+    if (IS_ERR(rt))
+        goto err;
 
     gtp5g_set_pktinfo_ipv4(pktinfo, pdr->sk, iph, hdr_creation, rt, &fl4, dev);
     gtp5g_push_header(skb, pktinfo);
@@ -1442,7 +1444,6 @@ static int gtp5g_fwd_skb_encap(struct sk_buff *skb, struct net_device *dev,
 
 		if (ip_xmit(skb, pdr->sk, dev) < 0) {
 			pr_err("ip_xmit error\n");
-			kfree_skb(skb);
 			return -1;
 		}
 
