@@ -19,8 +19,8 @@
 #include "pfcp_message.h"
 #include "pfcp_types.h"
 #include "pfcp_xact.h"
-#include "gtp5g.h"
-#include "gtp5gnl.h"
+#include "libgtp5gnl/gtp5g.h"
+#include "libgtp5gnl/gtp5gnl.h"
 #include "gtp_tunnel.h"
 
 

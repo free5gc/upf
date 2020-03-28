@@ -1,4 +1,4 @@
-LIBGTPNL_1.0 {
+LIBGTP5GNL {
 global:
   genl_socket_open;
   genl_socket_close;
