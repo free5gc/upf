@@ -23,7 +23,6 @@ target_include_directories(${PROJECT_NAME} PRIVATE
     "${LIBGTP5GNL_DST}/include"
     "${CMAKE_SOURCE_DIR}/src"
     "${CMAKE_SOURCE_DIR}/lib/gtpv1/include"
-    "${CMAKE_SOURCE_DIR}/lib/libgtp5gnl/include/libgtp5gnl"
     "${CMAKE_SOURCE_DIR}/lib/gtpv1/include"
     "${CMAKE_SOURCE_DIR}/lib/knet/include"
     "${CMAKE_SOURCE_DIR}/lib/pfcp/include"
