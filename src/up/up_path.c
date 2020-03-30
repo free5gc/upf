@@ -20,7 +20,7 @@
 #include "gtp_header.h"
 #include "gtp_buffer.h"
 #include "gtp_tunnel.h"
-#include "gtp5g.h"
+#include "libgtp5gnl/gtp5g.h"
 
 Status UpRouteInit() {
     Status status;

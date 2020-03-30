@@ -47,8 +47,8 @@ ls /dev/mqueue/
 rm /dev/mqueue/*
 ```
 
-### Remove gtp devices (using tools in libgtpnl)
+### Remove gtp devices (using tools in libgtp5gnl)
 ```bash
-cd lib/libgtpnl-1.2.1/tools
-sudo ./gtp-link del {Dev-Name}
+cd lib/libgtp5gnl/tools
+sudo ./gtp5g-link del {Dev-Name}
 ```

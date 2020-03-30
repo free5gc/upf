@@ -18,7 +18,7 @@
 #include "pfcp_node.h"
 #include "gtp_path.h"
 #include "pfcp_message.h"
-#include "gtp5g.h"
+#include "libgtp5gnl/gtp5g.h"
 
 #ifdef __cplusplus
 extern "C" {

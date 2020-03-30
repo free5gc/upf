@@ -2,7 +2,7 @@
 
 # UPF
 UPF_PATH=`pwd`
-export GO111MODULE="off"
+
 # Fix CMakeList
 perl -i -pe 'BEGIN{undef $/;} s/"\/gofree5gc/"\/free5gc/g' `find ./ -name '*.h'`
 # Modify cmake
@@ -16,8 +16,8 @@ set(BUILD_BIN_DIR "${CMAKE_BINARY_DIR}/bin")
 set(BUILD_CONFIG_DIR "${CMAKE_BINARY_DIR}/config")
 
 # Build paths
-set(LIBGTPNL_SRC "${CMAKE_SOURCE_DIR}/lib/libgtpnl-1.2.1")
-set(LIBGTPNL_DST "${CMAKE_BINARY_DIR}/libgtpnl")
+set(LIBGTP5GNL_SRC "${CMAKE_SOURCE_DIR}/lib/libgtp5gnl")
+set(LIBGTP5GNL_DST "${CMAKE_BINARY_DIR}/libgtp5gnl")
 set(LOGGER_SRC "${CMAKE_SOURCE_DIR}/lib/utlt/logger")
 set(LOGGER_DST "${CMAKE_BINARY_DIR}/utlt_logger")
 
@@ -34,10 +34,9 @@ add_custom_command(OUTPUT ${BUILD_CONFIG_DIR}
     COMMAND mkdir -p ${BUILD_CONFIG_DIR} >/dev/null 2>&1
     COMMAND cp "${CONFIG_SRC}/upfcfg.example.yaml" "${BUILD_CONFIG_DIR}/upfcfg.yaml"
     COMMAND cp "${CONFIG_SRC}/upfcfg.test.example.yaml" "${BUILD_CONFIG_DIR}/upfcfg.test.yaml"
+    COMMAND cp "${CONFIG_SRC}/upfcfg.ulcl.example.yaml" "${BUILD_CONFIG_DIR}/upfcfg.ulcl.yaml"
 )
 add_custom_target(configs ALL DEPENDS ${BUILD_CONFIG_DIR} VERBATIM)
-
-add_compile_options(-Wall -Werror -Wno-address-of-packed-member)
 
 # Submodules
 add_subdirectory(src)
@@ -48,50 +47,34 @@ echo 'cmake_minimum_required(VERSION 3.5)
 
 project(free5GC_gtpv1 C)
 
-set(LIBGTPNL_DST_SO "${LIBGTPNL_DST}/lib/libgtpnl.so")
+set(LIBGTP5GNL_DST_SO "${LIBGTP5GNL_DST}/lib/libgtp5gnl.so")
 
-# Build libgtpnl
+# Build libgtp5gnl
 # Add_custom_command does not create a new target. You have to define targets explicitly
 # by add_executable, add_library or add_custom_target in order to make them visible to make.
-add_custom_command(OUTPUT ${LIBGTPNL_DST_SO}
+add_custom_command(OUTPUT ${LIBGTP5GNL_DST_SO}
     # Display the given message before the commands are executed at build time
-    COMMENT "Building libgtpnl"
-    WORKING_DIRECTORY ${LIBGTPNL_SRC}
-
+    COMMENT "Building libgtp5gnl"
+    WORKING_DIRECTORY ${LIBGTP5GNL_SRC}
+    
     COMMAND chmod +x git-version-gen
     COMMAND autoreconf -iv
-    COMMAND ./configure --prefix=${LIBGTPNL_DST}
+    COMMAND ./configure --prefix=${LIBGTP5GNL_DST}
     COMMAND make -j`nproc`
     COMMAND make install
 )
-add_custom_target(libgtpnl ALL
-    # This is ALL target "libgtpnl", and it depends on ${LIBGTPNL_MAKEFILE}"
-    # If the file exists, then commands related to that file wont be executed.
+add_custom_target(libgtp5gnl ALL
+    # This is ALL target "libgtp5gnl", and it depends on ${LIBGTP5GNL_MAKEFILE}
+    # If the file exists, then commands related to that file will not be executed.
     # DONOT let other target depends on the same OUTPUT as current target,
     #   or it may be bad when doing parallel make.
-    DEPENDS ${LIBGTPNL_DST_SO}
+    DEPENDS ${LIBGTP5GNL_DST_SO}
 
     # To make quotes printable
     VERBATIM
 )
 
-link_directories("${LIBGTPNL_DST}/lib" ${LOGGER_DST})
-
-# Test
-add_executable("${PROJECT_NAME}_test" test.c)
-set_target_properties("${PROJECT_NAME}_test" PROPERTIES
-    OUTPUT_NAME "${BUILD_BIN_DIR}/testgtpv1"
-)
-
-target_link_libraries("${PROJECT_NAME}_test" free5GC_lib gtpnl logger)
-target_include_directories("${PROJECT_NAME}_test" PRIVATE
-    include
-    ${LOGGER_DST}
-    "${LIBGTPNL_DST}/include"
-    "${CMAKE_SOURCE_DIR}/lib/utlt/include"
-)
-target_compile_options("${PROJECT_NAME}_test" PRIVATE -Wall -Werror)
-add_dependencies("${PROJECT_NAME}_test" utlt_logger libgtpnl)' > ${UPF_PATH}/lib/gtpv1/CMakeLists.txt
+link_directories("${LIBGTP5GNL_DST}/lib" ${LOGGER_DST})' > ${UPF_PATH}/lib/gtpv1/CMakeLists.txt
 echo 'cmake_minimum_required(VERSION 3.5)
 
 project(free5GC_utlt_logger C)
@@ -101,7 +84,7 @@ link_directories(${LOGGER_DST})
 # Logger
 add_custom_command(OUTPUT ${LOGGER_DST}
     COMMENT "Building utlt_logger"
-
+    
     WORKING_DIRECTORY ${LOGGER_SRC}
     COMMAND go build -o ${LOGGER_DST}/liblogger.so -buildmode=c-shared
     COMMAND mv ${LOGGER_DST}/liblogger.h ${LOGGER_DST}/logger.h
@@ -115,7 +98,7 @@ echo 'cmake_minimum_required(VERSION 3.5)
 
 project(free5GC_UPF_main C)
 
-link_directories("${LIBGTPNL_DST}/lib" ${LOGGER_DST})
+link_directories("${LIBGTP5GNL_DST}/lib" ${LOGGER_DST})
 
 # Sources
 file(GLOB SRC_FILES
@@ -126,14 +109,14 @@ file(GLOB SRC_FILES
 add_executable(${PROJECT_NAME} ${SRC_FILES})
 set_target_properties(
     ${PROJECT_NAME}
-    PROPERTIES
+    PROPERTIES 
         OUTPUT_NAME "${BUILD_BIN_DIR}/free5gc-upfd"
         SUFFIX ""
 )
 
 target_include_directories(${PROJECT_NAME} PRIVATE
     ${LOGGER_DST}
-    "${LIBGTPNL_DST}/include"
+    "${LIBGTP5GNL_DST}/include"
     "${CMAKE_SOURCE_DIR}/src"
     "${CMAKE_SOURCE_DIR}/lib/gtpv1/include"
     "${CMAKE_SOURCE_DIR}/lib/knet/include"
@@ -141,16 +124,16 @@ target_include_directories(${PROJECT_NAME} PRIVATE
     "${CMAKE_SOURCE_DIR}/lib/utlt/include"
     "${CMAKE_SOURCE_DIR}/lib/utlt/logger/include"
 )
-target_link_libraries(${PROJECT_NAME} PRIVATE
-    free5GC_lib gtpnl logger yaml
+target_link_libraries(${PROJECT_NAME} PRIVATE 
+    free5GC_lib gtp5gnl logger yaml
 )
 target_compile_options(${PROJECT_NAME} PRIVATE -Wall -Werror)
-add_dependencies(${PROJECT_NAME} utlt_logger libgtpnl)' > ${UPF_PATH}/src/CMakeLists.txt
+add_dependencies(${PROJECT_NAME} utlt_logger libgtp5gnl)' > ${UPF_PATH}/src/CMakeLists.txt
 echo 'cmake_minimum_required(VERSION 3.5)
 
 project(free5GC_lib)
 
-set(LIBGTPNL_DST_SO "${LIBGTPNL_DST}/lib/libgtpnl.so")
+set(LIBGTP5GNL_DST_SO "${LIBGTP5GNL_DST}/lib/libgtp5gnl.so")
 
 link_directories(${LOGGER_DST})
 
@@ -166,14 +149,14 @@ add_library(${PROJECT_NAME} STATIC ${SRC_FILES})
 target_link_libraries(${PROJECT_NAME} rt pthread mnl logger)
 target_include_directories(${PROJECT_NAME} PRIVATE
     ${LOGGER_DST}
-    "${LIBGTPNL_DST}/include"
+    "${LIBGTP5GNL_DST}/include"
     "${CMAKE_SOURCE_DIR}/lib/gtpv1/include"
     "${CMAKE_SOURCE_DIR}/lib/knet/include"
     "${CMAKE_SOURCE_DIR}/lib/pfcp/include"
     "${CMAKE_SOURCE_DIR}/lib/utlt/include"
 )
 target_compile_options(${PROJECT_NAME} PRIVATE -Wall -Werror)
-add_dependencies(${PROJECT_NAME} utlt_logger libgtpnl)' > ${UPF_PATH}/lib/CMakeLists.txt
+add_dependencies(${PROJECT_NAME} utlt_logger libgtp5gnl) ' > ${UPF_PATH}/lib/CMakeLists.txt
 
 rm -f ${UPF_PATH}/lib/pfcp/CMakeLists.txt
 rm -f ${UPF_PATH}/test/CMakeLists.txt
@@ -184,7 +167,7 @@ cp lib/libfree5GC_lib.a ${UPF_PATH}/lib
 # Remove unrelease file
 cd ${UPF_PATH}
 rm -rf lib/test/
-rm -rf lib/pfcp/src lib/pfcp/support lib/pfcp/test
+rm -rf lib/pfcp/src lib/pfcp/test
 rm -rf lib/knet/src lib/knet/CMakeLists.txt lib/knet/test.c
 rm -f lib/CMakeLists.txt
 rm -rf lib/gtpv1/src
@@ -201,8 +184,8 @@ set(BUILD_BIN_DIR "${CMAKE_BINARY_DIR}/bin")
 set(BUILD_CONFIG_DIR "${CMAKE_BINARY_DIR}/config")
 
 # Build paths
-set(LIBGTPNL_SRC "${CMAKE_SOURCE_DIR}/lib/libgtpnl-1.2.1")
-set(LIBGTPNL_DST "${CMAKE_BINARY_DIR}/libgtpnl")
+set(LIBGTP5GNL_SRC "${CMAKE_SOURCE_DIR}/lib/libgtp5gnl")
+set(LIBGTP5GNL_DST "${CMAKE_BINARY_DIR}/libgtp5gnl")
 set(LOGGER_SRC "${CMAKE_SOURCE_DIR}/lib/utlt/logger")
 set(LOGGER_DST "${CMAKE_BINARY_DIR}/utlt_logger")
 
@@ -219,6 +202,7 @@ add_custom_command(OUTPUT ${BUILD_CONFIG_DIR}
     COMMAND mkdir -p ${BUILD_CONFIG_DIR} >/dev/null 2>&1
     COMMAND cp "${CONFIG_SRC}/upfcfg.example.yaml" "${BUILD_CONFIG_DIR}/upfcfg.yaml"
     COMMAND cp "${CONFIG_SRC}/upfcfg.test.example.yaml" "${BUILD_CONFIG_DIR}/upfcfg.test.yaml"
+    COMMAND cp "${CONFIG_SRC}/upfcfg.ulcl.example.yaml" "${BUILD_CONFIG_DIR}/upfcfg.ulcl.yaml"
 )
 add_custom_target(configs ALL DEPENDS ${BUILD_CONFIG_DIR} VERBATIM)
 
@@ -230,55 +214,39 @@ echo 'cmake_minimum_required(VERSION 3.5)
 
 project(free5GC_gtpv1 C)
 
-set(LIBGTPNL_DST_SO "${LIBGTPNL_DST}/lib/libgtpnl.so")
+set(LIBGTP5GNL_DST_SO "${LIBGTP5GNL_DST}/lib/libgtp5gnl.so")
 
-# Build libgtpnl
+# Build libgtp5gnl
 # Add_custom_command does not create a new target. You have to define targets explicitly
 # by add_executable, add_library or add_custom_target in order to make them visible to make.
-add_custom_command(OUTPUT ${LIBGTPNL_DST_SO}
+add_custom_command(OUTPUT ${LIBGTP5GNL_DST_SO}
     # Display the given message before the commands are executed at build time
-    COMMENT "Building libgtpnl"
-    WORKING_DIRECTORY ${LIBGTPNL_SRC}
-
+    COMMENT "Building libgtp5gnl"
+    WORKING_DIRECTORY ${LIBGTP5GNL_SRC}
+    
     COMMAND chmod +x git-version-gen
     COMMAND autoreconf -iv
-    COMMAND ./configure --prefix=${LIBGTPNL_DST}
+    COMMAND ./configure --prefix=${LIBGTP5GNL_DST}
     COMMAND make -j`nproc`
     COMMAND make install
 )
-add_custom_target(libgtpnl ALL
-    # This is ALL target "libgtpnl", and it depends on ${LIBGTPNL_MAKEFILE}"
-    # If the file exists, then commands related to that file wont be executed.
+add_custom_target(libgtp5gnl ALL
+    # This is ALL target "libgtp5gnl", and it depends on ${LIBGTP5GNL_MAKEFILE}
+    # If the file exists, then commands related to that file will not be executed.
     # DONOT let other target depends on the same OUTPUT as current target,
     #   or it may be bad when doing parallel make.
-    DEPENDS ${LIBGTPNL_DST_SO}
+    DEPENDS ${LIBGTP5GNL_DST_SO}
 
     # To make quotes printable
     VERBATIM
 )
 
-link_directories("${CMAKE_SOURCE_DIR}/lib" "${LIBGTPNL_DST}/lib" ${LOGGER_DST})
-
-# Test
-add_executable("${PROJECT_NAME}_test" test.c)
-set_target_properties("${PROJECT_NAME}_test" PROPERTIES
-    OUTPUT_NAME "${BUILD_BIN_DIR}/testgtpv1"
-)
-
-target_link_libraries("${PROJECT_NAME}_test" free5GC_lib gtpnl logger)
-target_include_directories("${PROJECT_NAME}_test" PRIVATE
-    include
-    ${LOGGER_DST}
-    "${LIBGTPNL_DST}/include"
-    "${CMAKE_SOURCE_DIR}/lib/utlt/include"
-)
-target_compile_options("${PROJECT_NAME}_test" PRIVATE -Wall -Werror)
-add_dependencies("${PROJECT_NAME}_test" utlt_logger libgtpnl)' > ${UPF_PATH}/lib/gtpv1/CMakeLists.txt
+link_directories("${CMAKE_SOURCE_DIR}/lib" "${LIBGTP5GNL_DST}/lib" ${LOGGER_DST})' > ${UPF_PATH}/lib/gtpv1/CMakeLists.txt
 echo 'cmake_minimum_required(VERSION 3.5)
 
 project(free5GC_UPF_main C)
 
-link_directories("${CMAKE_SOURCE_DIR}/lib" "${LIBGTPNL_DST}/lib" ${LOGGER_DST})
+link_directories("${CMAKE_SOURCE_DIR}/lib" "${LIBGTP5GNL_DST}/lib" ${LOGGER_DST})
 
 # Sources
 file(GLOB SRC_FILES
@@ -289,14 +257,14 @@ file(GLOB SRC_FILES
 add_executable(${PROJECT_NAME} ${SRC_FILES})
 set_target_properties(
     ${PROJECT_NAME}
-    PROPERTIES
+    PROPERTIES 
         OUTPUT_NAME "${BUILD_BIN_DIR}/free5gc-upfd"
         SUFFIX ""
 )
 
 target_include_directories(${PROJECT_NAME} PRIVATE
     ${LOGGER_DST}
-    "${LIBGTPNL_DST}/include"
+    "${LIBGTP5GNL_DST}/include"
     "${CMAKE_SOURCE_DIR}/src"
     "${CMAKE_SOURCE_DIR}/lib/gtpv1/include"
     "${CMAKE_SOURCE_DIR}/lib/knet/include"
@@ -304,11 +272,11 @@ target_include_directories(${PROJECT_NAME} PRIVATE
     "${CMAKE_SOURCE_DIR}/lib/utlt/include"
     "${CMAKE_SOURCE_DIR}/lib/utlt/logger/include"
 )
-target_link_libraries(${PROJECT_NAME} PRIVATE
-    free5GC_lib rt pthread gtpnl mnl logger yaml
+target_link_libraries(${PROJECT_NAME} PRIVATE 
+    free5GC_lib rt pthread gtp5gnl mnl logger yaml
 )
 target_compile_options(${PROJECT_NAME} PRIVATE -Wall -Werror)
-add_dependencies(${PROJECT_NAME} utlt_logger libgtpnl)' > ${UPF_PATH}/src/CMakeLists.txt
+add_dependencies(${PROJECT_NAME} utlt_logger libgtp5gnl)' > ${UPF_PATH}/src/CMakeLists.txt
 
 go get -u github.com/sirupsen/logrus
 

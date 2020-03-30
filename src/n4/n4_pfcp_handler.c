@@ -14,8 +14,8 @@
 #include "gtp_path.h"
 #include "n4_pfcp_build.h"
 #include "up/up_path.h"
-#include "gtp5g.h"
-#include "gtp5gnl.h"
+#include "libgtp5gnl/gtp5g.h"
+#include "libgtp5gnl/gtp5gnl.h"
 #include "gtp_tunnel.h"
 
 

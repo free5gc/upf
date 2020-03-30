@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.5)
 
 project(free5GC_knet C)
 
-link_directories("${LIBGTPNL_DST}/lib" ${LOGGER_DST})
+link_directories("${LIBGTP5GNL_DST}/lib" ${LOGGER_DST})
 
 # Sources
 file(GLOB SRC_FILES "src/*.c")
