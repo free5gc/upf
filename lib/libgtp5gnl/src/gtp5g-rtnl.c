@@ -1,7 +1,8 @@
 /* GTP specific RTNetlink helper functions */
 
 /* (C) 2014 by sysmocom - s.f.m.c. GmbH
- * Author: Pablo Neira Ayuso <pablo@gnumonks.org>
+ * (C) 2017 by Pablo Neira Ayuso <pablo@gnumonks.org>
+ * Author: Yao-Wen Chang <yaowenowo@gmail.com>
  *
  * All Rights Reserved
  *

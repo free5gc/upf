@@ -15,7 +15,7 @@ export DEB_LDFLAGS_MAINT_STRIP = -Wl,-Bsymbolic-functions
 	dh $@ --with autoreconf --fail-missing
 
 override_dh_strip:
-	dh_strip --dbg-package=libgtpnl-dbg
+	dh_strip --dbg-package=libgtp5gnl-dbg
 
 override_dh_install:
 	sed -i "/dependency_libs/ s/'.*'/''/" `find . -name '*.la'`
