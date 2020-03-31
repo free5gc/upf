@@ -1,7 +1,8 @@
 /* GTP specific Generic Netlink helper functions */
 
 /* (C) 2014 by sysmocom - s.f.m.c. GmbH
- * Author: Pablo Neira Ayuso <pablo@gnumonks.org>
+ * (C) 2017 by Pablo Neira Ayuso <pablo@gnumonks.org>
+ * Author: Yao-Wen Chang <yaowenowo@gmail.com>
  *
  * All Rights Reserved
  *
@@ -401,7 +402,7 @@ static int genl_gtp5g_attr_cb(const struct nlmsghdr *nlh, void *data)
     }
 
     if (far_tb[GTP5G_FAR_RELATED_TO_PDR]) {
-        far->related_pdr_num = mnl_attr_get_payload_len(far_tb[GTP5G_FAR_RELATED_TO_PDR]) / (sizeof(uint32_t) / sizeof(char));
+        far->related_pdr_num = mnl_attr_get_payload_len(far_tb[GTP5G_FAR_RELATED_TO_PDR]) / (sizeof(uint16_t) / sizeof(char));
         far->related_pdr_list = calloc(1, mnl_attr_get_payload_len(far_tb[GTP5G_FAR_RELATED_TO_PDR]));
         memcpy(far->related_pdr_list, mnl_attr_get_payload(far_tb[GTP5G_FAR_RELATED_TO_PDR]), mnl_attr_get_payload_len(far_tb[GTP5G_FAR_RELATED_TO_PDR]));
     }
