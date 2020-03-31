@@ -24,12 +24,14 @@
 #include "gtp_tunnel.h"
 
 
+#define MAX_POOL_OF_PDRID (MAX_POOL_OF_BEARER * 2)
 #define MAX_POOL_OF_QER (MAX_POOL_OF_SESS * 2)
 #define MAX_POOL_OF_URR (MAX_POOL_OF_UE)
 #define MAX_POOL_OF_BAR (MAX_POOL_OF_UE)
 
 #define MAX_NUM_OF_SUBNET       16
 
+IndexDeclare(upfPdrIdPool, UpfPdrId, MAX_POOL_OF_PDRID);
 IndexDeclare(upfSessionPool, UpfSession, MAX_POOL_OF_SESS);
 IndexDeclare(upfQerPool, UpfQer, MAX_POOL_OF_QER);
 IndexDeclare(upfUrrPool, UpfUrr, MAX_POOL_OF_URR);
@@ -80,6 +82,7 @@ Status UpfContextInit() {
     // Init Resource
     IndexInit(&upfSessionPool, MAX_POOL_OF_SESS);
     IndexInit(&upfQerPool, MAX_POOL_OF_QER);
+    IndexInit(&upfPdrIdPool, MAX_POOL_OF_PDRID);
     IndexInit(&upfUrrPool, MAX_POOL_OF_URR);
     IndexInit(&upfBarPool, MAX_POOL_OF_BAR);
 
@@ -119,6 +122,7 @@ Status UpfContextTerminate() {
     IndexTerminate(&upfBarPool);
     IndexTerminate(&upfUrrPool);
     IndexTerminate(&upfQerPool);
+    IndexTerminate(&upfPdrIdPool);
     IndexTerminate(&upfSessionPool);
 
     PfcpRemoveAllNodes(&self.upfN4List);
@@ -137,6 +141,24 @@ Status UpfContextTerminate() {
     upfContextInitialized = 0;
 
     return status;
+}
+
+UpfPdrId *UpfPdrIdAdd(uint16_t pdrId) {
+    UTLT_Assert(pdrId, return NULL, "PDR ID cannot be 0");
+    UpfPdrId *pdrIdPtr;
+
+    IndexAlloc(&upfPdrIdPool, pdrIdPtr);
+    pdrIdPtr->pdrId = pdrId;
+
+    return pdrIdPtr;
+}
+
+Status UpfPdrIdRemove(UpfPdrId *pdrIdPtr) {
+    UTLT_Assert(pdrIdPtr, return STATUS_ERROR, "PDR error");
+
+    IndexFree(&upfPdrIdPool, pdrIdPtr);
+
+    return STATUS_OK;
 }
 
 HashIndex *UpfBufPacketFirst() {
@@ -367,17 +389,18 @@ Status UpfSessionRemove(UpfSession *session) {
     //     UpfUeIPFree(session->ueIpv6);
     // }
 
-    uint16_t *pdrId = ListFirst(&session->pdrIdList);
-    while (pdrId) {
+    UpfPdrId *pdrIdPtr = ListFirst(&session->pdrIdList);
+    while (pdrIdPtr) {
         Gtpv1TunDevNode *gtpv1Dev4 =
           (Gtpv1TunDevNode*)ListFirst(&Self()->gtpv1DevList);
         UTLT_Assert(gtpv1Dev4, return STATUS_ERROR, "No GTP Device");
-        Status status = GtpTunnelDelPdr(gtpv1Dev4->ifname, *pdrId);
+        Status status = GtpTunnelDelPdr(gtpv1Dev4->ifname, pdrIdPtr->pdrId);
         UTLT_Assert(status == STATUS_OK, ,
-                    "Remove PDR[%u] failed", *pdrId);
+                    "Remove PDR[%u] failed", pdrIdPtr->pdrId);
         // TODO: remove FAR of PDR if need
-        ListRemove(&session->pdrIdList, pdrId);
-        pdrId = (uint16_t *)ListFirst(&session->pdrIdList);
+        ListRemove(&session->pdrIdList, pdrIdPtr);
+        UTLT_Assert(UpfPdrIdRemove(pdrIdPtr) == STATUS_OK, , "Pdr id remove error");
+        pdrIdPtr = (UpfPdrId *)ListFirst(&session->pdrIdList);
     }
 
     IndexFree(&upfSessionPool, session);

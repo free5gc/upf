@@ -29,6 +29,7 @@ typedef struct _UpfDev       UpfDev;
 typedef struct gtp5g_pdr     UpfPdr;
 typedef struct gtp5g_far     UpfFar;
 typedef struct _UpfBufPacket UpfBufPacket;
+typedef struct _UpfPdrId     UpfPdrId;
 typedef struct _UpfBar       UpfBar;
 typedef struct _UpfQer       UpfQer;
 typedef struct _UpfUrr       UpfUrr;
@@ -159,6 +160,13 @@ typedef struct _UpfBufPacket {
     Bufblk          *packetBuffer;
 } UpfBufPakcet;
 
+typedef struct _UpfPdrId {
+    ListNode        node;
+    int             index;
+
+    uint16_t        pdrId;
+} UpfPdrId;
+
 typedef struct _UpfUrr {
     ListNode        node;
     int             index;
@@ -208,6 +216,8 @@ Status UpfApnRemoveAll();
 // BufPacket
 HashIndex *UpfBufPacketFirst();
 HashIndex *UpfBufPacketNext(HashIndex *hashIdx);
+UpfPdrId *UpfPdrIdAdd(uint16_t pdrId);
+Status UpfPdrIdRemove(UpfPdrId *pdrIdPtr);
 UpfBufPacket *UpfBufPacketThis(HashIndex *hashIdx);
 UpfBufPacket *UpfBufPacketFindByPdrId(uint16_t pdrId);
 UpfBufPacket *UpfBufPacketAdd(const UpfSession * const session,
