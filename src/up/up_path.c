@@ -338,8 +338,10 @@ Status UpSendPacketByPdrFar(UpfPdr *pdr, UpfFar *far, Sock *sock) {
                 // if unlock failed, keep trying
                 UTLT_Error("spin unlock error");
             }
+            status = BufblkFree(bufStorage->packetBuffer);
+        } else {
+            UTLT_Debug("bufStorage is NULL");
         }
-        status = BufblkFree(bufStorage->packetBuffer);
         UTLT_Assert(status == STATUS_OK, return status,
                     "Free packet buffer failed");
         bufStorage->packetBuffer = NULL;
