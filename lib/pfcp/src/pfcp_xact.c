@@ -53,7 +53,7 @@ Status PfcpXactTerminate(void) {
                 "PFCP Xact already finalized");
 
     if (PoolUsedCheck(&pfcpXactPool)) {
-        UTLT_Error("%d not freed in pfcpXactPool[%d] of PFCP Transaction",
+        UTLT_Debug("%d not freed in pfcpXactPool[%d] of PFCP Transaction",
                    PoolUsedCheck(&pfcpXactPool), PoolSize(&pfcpXactPool));
     }
     UTLT_Trace("%d freed in pfcpXactPool[%d] of PFCP Transaction",
