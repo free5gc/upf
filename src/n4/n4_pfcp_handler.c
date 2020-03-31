@@ -210,9 +210,61 @@ Status UpfN4HandleCreatePdr(UpfSession *session, CreatePDR *createPdr) {
     }
 
     // PDI SDF filter
+    uint16_t flowDescriptionLen = 0;
+    char *flowDescription = NULL;
     if (createPdr->pDI.sDFFilter.presence) {
-        gtp5g_pdr_set_sdf_filter_description(tmpPdr,
-                                             createPdr->pDI.sDFFilter.value);
+        // Decode SDF
+        PfcpSDFFilterDescription des =
+            *(PfcpSDFFilterDescription*)createPdr->pDI.sDFFilter.value;
+
+        for (size_t idx = 2; idx < createPdr->pDI.sDFFilter.len;
+        /* Do nothing here */) {
+            if (des.fd) {
+                flowDescriptionLen =
+                    *(uint16_t*)((uint8_t*)createPdr->pDI.sDFFilter.value+idx);
+
+                flowDescription =
+                    UTLT_Calloc(flowDescriptionLen + 1, sizeof(uint8_t));
+                UTLT_Assert(flowDescription, idx += 2 + flowDescriptionLen; continue,
+                            "flow description allocate error");
+
+                memcpy(flowDescription,
+                       (uint8_t*)createPdr->pDI.sDFFilter.value+idx+2,
+                       flowDescriptionLen);
+
+                gtp5g_pdr_set_sdf_filter_description(tmpPdr, flowDescription);
+
+                idx += 2 + flowDescriptionLen;
+            } else if (des.ttc) {
+                /*
+                uint16_t tosTrafficClass =
+                    *(uint16_t*)((uint8_t*)createPdr->pDI.sDFFilter.value+idx);
+                */
+                UTLT_Warning("SDF ToS traffic class not implemented");
+                idx += 2;
+            } else if (des.spi) {
+                /*
+                uint32_t securityParameterIndex =
+                    *(uint32_t*)((uint8_t*)createPdr->pDI.sDFFilter.value+idx);
+                */
+                UTLT_Warning("SDF security paramenter index not implemented");
+                idx += 4;
+            } else if (des.fl) {
+                // TODO: Flow Label
+                UTLT_Warning("SDF flow label not implemented");
+                idx += 3;
+            } else if (des.bid) {
+                /*
+                uint32_t sDFFilterId =
+                    *(uint32_t*)((uint8_t*)createPdr->pDI.sDFFilter.value+idx);
+                */
+                UTLT_Warning("SDF filter id not implemented now");
+                idx += 4;
+            } else {
+                UTLT_Warning("Other tag not implements");
+                idx++;
+            }
+        }
     }
 
     // Outer Header Removal
@@ -235,6 +287,10 @@ Status UpfN4HandleCreatePdr(UpfSession *session, CreatePDR *createPdr) {
     gtp5g_pdr_free(tmpPdr);
     UTLT_Assert(tmpPdr != NULL, return STATUS_ERROR,
                 "Free PDR struct error");
+    if (flowDescription) {
+        UTLT_Assert(UTLT_Free(flowDescription) == STATUS_OK, ,
+                    "Free flow description error");
+    }
 
     // Set session point to pdr
     UpfPdrId *pdrIdPtr = UpfPdrIdAdd(pdrId);
