@@ -750,11 +750,11 @@ Status UpfN4HandleSessionDeletionRequest(UpfSession *session, PfcpXact *xact,
     char *ifname = gtpv1Dev4->ifname;
 
     UTLT_Assert(gtpv1Dev4, return STATUS_ERROR, "No GTP Device");
-    uint16_t *pdrIdPtr, pdrId;
+    uint16_t pdrId;
+    UpfPdrId *pdrIdPtr;
     // Always get first one because the first one before have been deleted
-    for (pdrIdPtr = ListFirst(&session->pdrIdList), pdrId = *pdrIdPtr;
-         pdrIdPtr;
-         pdrIdPtr = ListNext(&session->pdrIdList), pdrId = *pdrIdPtr) {
+    while((pdrIdPtr = ListFirst(&session->pdrIdList))) {
+        pdrId = pdrIdPtr->pdrId;
         // Remove PDR before far, but save farId first
         UpfPdr *tmpPdr = GtpTunnelFindPdrById(ifname, pdrId);
         uint32_t farId = *gtp5g_pdr_get_far_id(tmpPdr);
@@ -771,7 +771,8 @@ Status UpfN4HandleSessionDeletionRequest(UpfSession *session, PfcpXact *xact,
             UTLT_Debug("Remove FAR[%u] error, "
                        "but it may be n PDR point to same FAR", farId);
         }
-
+        ListRemove(&session->pdrIdList, pdrIdPtr);
+        UpfPdrIdRemove(pdrIdPtr);
     }
 
     /* delete session */
