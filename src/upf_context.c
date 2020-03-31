@@ -389,18 +389,18 @@ Status UpfSessionRemove(UpfSession *session) {
     //     UpfUeIPFree(session->ueIpv6);
     // }
 
-    UpfPdrId *pdrId = ListFirst(&session->pdrIdList);
-    while (pdrId) {
+    UpfPdrId *pdrIdPtr = ListFirst(&session->pdrIdList);
+    while (pdrIdPtr) {
         Gtpv1TunDevNode *gtpv1Dev4 =
           (Gtpv1TunDevNode*)ListFirst(&Self()->gtpv1DevList);
         UTLT_Assert(gtpv1Dev4, return STATUS_ERROR, "No GTP Device");
-        Status status = GtpTunnelDelPdr(gtpv1Dev4->ifname, pdrId->pdrId);
+        Status status = GtpTunnelDelPdr(gtpv1Dev4->ifname, pdrIdPtr->pdrId);
         UTLT_Assert(status == STATUS_OK, ,
-                    "Remove PDR[%u] failed", pdrId->pdrId);
+                    "Remove PDR[%u] failed", pdrIdPtr->pdrId);
         // TODO: remove FAR of PDR if need
-        ListRemove(&session->pdrIdList, pdrId);
-        UTLT_Assert(UpfPdrIdRemove(pdrId) == STATUS_OK, , "Pdr id remove error");
-        pdrId = (UpfPdrId *)ListFirst(&session->pdrIdList);
+        ListRemove(&session->pdrIdList, pdrIdPtr);
+        UTLT_Assert(UpfPdrIdRemove(pdrIdPtr) == STATUS_OK, , "Pdr id remove error");
+        pdrIdPtr = (UpfPdrId *)ListFirst(&session->pdrIdList);
     }
 
     IndexFree(&upfSessionPool, session);
