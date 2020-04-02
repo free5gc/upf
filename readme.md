@@ -2,10 +2,19 @@
 
 ## Get Started
 ### Prerequisites
+Libraries used in UPF
 ```bash
 sudo apt-get -y update
 sudo apt-get -y install git gcc cmake go libmnl-dev autoconf libtool libyaml-dev
 go get github.com/sirupsen/logrus
+```
+
+Linux kernel module 5G GTP-U (Linux kernel version = 5.0.0-23-generic)
+```bash
+git clone https://github.com/PrinzOwO/gtp5g.git
+cd gtp5g
+make
+sudo make install
 ```
 
 ### Build
