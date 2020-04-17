@@ -14,20 +14,6 @@
 
 PoolDeclare(gtpv1DevPool, Gtpv1TunDevNode, MAX_NUM_OF_GTPDEV);
 
-// TODO: Need to delete
-Status GtpTunnelAdd(const char *ifname, int iteid, int oteid, const char *destIP, const char *tunIP) {
-    return 0;
-}
-Status GtpTunnelDel(const char *ifname, int iteid) {
-    return 0;
-}
-
-Status GtpTunnelList() {
-    return 0;
-}
-
-
-
 Status GtpLinkCreate(Gtpv1TunDevNode *node) {
     UTLT_Assert(node, return STATUS_ERROR, "GTPv1 tunnel node is NULL");
     Status status;
