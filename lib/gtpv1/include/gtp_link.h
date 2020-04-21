@@ -30,11 +30,6 @@ Status GtpLinkFree(Gtpv1TunDevNode *node);
 Status NetlinkSockOpen(NetlinkInfo *info, const char *ifname, const char *family_name);
 Status NetlinkSockClose(NetlinkInfo *info);
 
-// TODO: Need to delete
-Status GtpTunnelAdd(const char *ifname, int iteid, int oteid, const char *destIP, const char *tunIP);
-Status GtpTunnelDel(const char *ifname, int iteid);
-Status GtpTunnelList();
-
 Status Gtpv1DevPoolInit();
 Status Gtpv1DevPoolFinal();
 Gtpv1TunDevNode *Gtpv1DevListAdd(ListNode *list, const char *ip, const char *ifname);

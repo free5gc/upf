@@ -44,19 +44,3 @@ target_include_directories(${PROJECT_NAME} PRIVATE
 )
 target_compile_options(${PROJECT_NAME} PRIVATE -Wall -Werror)
 add_dependencies(${PROJECT_NAME} libgtp5gnl)
-
-# Test
-#add_executable(${PROJECT_NAME}_test test.c)
-#set_target_properties(${PROJECT_NAME}_test PROPERTIES 
-#    OUTPUT_NAME "${BUILD_BIN_DIR}/testgtpv1"
-#)
-
-#target_link_libraries(${PROJECT_NAME}_test free5GC_utlt gtp5gnl logger ${PROJECT_NAME})
-#target_include_directories(${PROJECT_NAME}_test PRIVATE
-#    include
-#    ${LOGGER_DST}
-#    "${LIBGTP5GNL_DST}/include"
-#    "${CMAKE_SOURCE_DIR}/lib/utlt/include"
-#)
-#target_compile_options(${PROJECT_NAME}_test PRIVATE -Wall -Werror)
-#add_dependencies(${PROJECT_NAME}_test libgtp5gnl)
