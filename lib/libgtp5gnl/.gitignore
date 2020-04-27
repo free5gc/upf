@@ -30,7 +30,8 @@ aclocal.m4
 libgtp5gnl.pc
 libtool
 build-aux
-m4
+m4/*
+!m4/gcc4_visibility.m4
 
 # Debian package build temporary files
 build-stamp
