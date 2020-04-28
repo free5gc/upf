@@ -3,7 +3,11 @@ package main
 import (
 	"C"
 	"github.com/sirupsen/logrus"
+	"os"
 	"runtime"
+
+	"free5gc/lib/logger_conf"
+	"free5gc/lib/logger_util"
 )
 
 var log *logrus.Logger
@@ -32,6 +36,16 @@ func init() {
 			// repopath = strings.Replace(repopath, "/bin", "", 1)
 			return "", ""
 		},
+	}
+
+	free5gcLogHook, err := logger_util.NewFileHook(logger_conf.Free5gcLogFile, os.O_CREATE|os.O_APPEND|os.O_RDWR, 0666)
+	if err == nil {
+		log.Hooks.Add(free5gcLogHook)
+	}
+
+	selfLogHook, err := logger_util.NewFileHook(logger_conf.NfLogDir+"upf.log", os.O_CREATE|os.O_APPEND|os.O_RDWR, 0666)
+	if err == nil {
+		log.Hooks.Add(selfLogHook)
 	}
 
 	UpfUtilLog = log.WithFields(logrus.Fields{"UPF": "Util"})
