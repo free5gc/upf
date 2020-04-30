@@ -59,7 +59,7 @@ typedef enum {
 } PfcpXactStage;
 
 Status PfcpXactInit(TimerList *timerList, uintptr_t responseEvent, uintptr_t holdingEvent);
-Status PfcpXactTerminate(void);
+Status PfcpXactTerminate();
 PfcpXact *PfcpXactLocalCreate(PfcpNode *gnode, PfcpHeader *header, Bufblk *bufBlk);
 PfcpXact *PfcpXactRemoteCreate(PfcpNode *gnode, uint32_t sqn);
 Status PfcpXactUpdateTx(PfcpXact *xact, PfcpHeader *header, Bufblk *bufBlk);
