@@ -32,8 +32,8 @@ typedef struct _PfcpNode {
     PfcpUserPlaneIpResourceInformation  userPlaneInfo;
 } PfcpNode;
 
-Status PfcpNodeInit(void);
-Status PfcpNodeTerminate(void);
+Status PfcpNodeInit();
+Status PfcpNodeTerminate();
 Status PfcpAddNode(ListNode *list, PfcpNode **node,
                    const SockAddr *allList, _Bool noIpv4, _Bool noIpv6, _Bool preferIpv4);
 PfcpNode *PfcpAddNodeWithSeid(ListNode *list, PfcpFSeid *fSeid,

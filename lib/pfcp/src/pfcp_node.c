@@ -13,13 +13,13 @@
 
 PoolDeclare(pfcpNodePool, PfcpNode, MAX_PFCP_NODE_POOL_SIZE);
 
-Status PfcpNodeInit(void) {
+Status PfcpNodeInit() {
     PoolInit(&pfcpNodePool, MAX_PFCP_NODE_POOL_SIZE);
 
     return STATUS_OK;
 }
 
-Status PfcpNodeTerminate(void) {
+Status PfcpNodeTerminate() {
     if (PoolUsedCheck(&pfcpNodePool)) {
         UTLT_Error("%d not freed in pfcpNodePool[%d]",
                 PoolUsedCheck(&pfcpNodePool), PoolSize(&pfcpNodePool));

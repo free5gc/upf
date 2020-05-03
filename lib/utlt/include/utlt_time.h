@@ -44,7 +44,7 @@ typedef struct _TimeTM {
 } TimeTM;
 
 // return current time in microseconds (usec)
-utime_t TimeNow(void);
+utime_t TimeNow();
 
 // convert time to human readable components in GMT / local timezone
 Status TimeConvert(TimeTM *timeTM, utime_t ut, int timeType);

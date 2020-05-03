@@ -33,9 +33,9 @@ typedef uintptr_t TimerBlkID;
 
 typedef void (*ExpireFunc)(uintptr_t data, uintptr_t param[]);
 
-Status TimerPoolInit(void);
-Status TimerFinal(void);
-uint32_t TimerGetPoolSize(void);
+Status TimerPoolInit();
+Status TimerFinal();
+uint32_t TimerGetPoolSize();
 
 void TimerListInit(TimerList *tmList);
 Status TimerExpireCheck(TimerList *tmList, uintptr_t data);

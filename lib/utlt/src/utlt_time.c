@@ -1,6 +1,6 @@
 #include "utlt_time.h"
 
-utime_t TimeNow(void) {
+utime_t TimeNow() {
     struct timeval tv;
     gettimeofday(&tv, NULL);
     return tv.tv_sec * USEC_PER_SEC + tv.tv_usec;

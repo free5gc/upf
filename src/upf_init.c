@@ -1,4 +1,4 @@
-#include "upf.h"
+#include "upf_init.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -20,173 +20,245 @@
 #include "n4/n4_pfcp_path.h"
 #include "pfcp_xact.h"
 
-static Status SignalRegister();
-static void SignalHandler(int sigval);
+static Status SignalRegister(void *data);
+
+static Status ConfigHandle(void *data);
+
+static Status EpollInit(void *data);
+static Status EpollTerm(void *data);
+
+static Status EventQueueInit(void *data);
+static Status EventQueueTerm(void *data);
+
+static Status PacketRecvThreadInit(void *data);
+static Status PacketRecvThreadTerm(void *data);
+
+static Status PfcpInit(void *data);
+static Status PfcpTerm(void *data);
 
 void PacketReceiverThread(ThreadID id, void *data);
 
-// TODO : Add other init in this part for UPF
-Status UpfInit(char *configPath) {
-    Status status;
+static char configFilePath[MAX_FILE_PATH_STRLEN] = "./config/upfcfg.yaml";
 
-    // Resolve config path
-    UTLT_Assert(GetAbsPath(configPath) == STATUS_OK, 
-                return STATUS_ERROR, "Invalid config path: %s", configPath);
-    UTLT_Info("Config: %s", configPath);
+UpfOps UpfOpsList[] = {
+    {
+        .name = "Library - Bufblk Pool",
+        .init = BufblkPoolInit,
+        .initData = NULL,
+        .term = BufblkPoolFinal,
+        .termData = NULL,
+    },
+    {
+        .name = "Library - Thread",
+        .init = ThreadInit,
+        .initData = NULL,
+        .term = ThreadFinal,
+        .termData = NULL,
+    },
+    {
+        .name = "Library - Timer Pool",
+        .init = TimerPoolInit,
+        .initData = NULL,
+        .term = TimerFinal,
+        .termData = NULL,
+    },
+    {
+        .name = "Library - Socket Pool",
+        .init = SockPoolInit,
+        .initData = NULL,
+        .term = SockPoolFinal,
+        .termData = NULL,
+    },
+    // TODO: This part will be abstract as GtpEnvInit
+    {
+        .name = "Library - GTPv1 Device Pool",
+        .init = Gtpv1DevPoolInit,
+        .initData = NULL,
+        .term = Gtpv1DevPoolFinal,
+        .termData = NULL,
+    },
+    {
+        .name = "UPF - Context",
+        .init = UpfContextInit,
+        .initData = NULL,
+        .term = UpfContextTerminate,
+        .termData = NULL,
+    },
+    {
+        .name = "UPF - Signal Registration",
+        .init = SignalRegister,
+        .initData = NULL,
+        .term = NULL,
+        .termData = NULL,
+    },
+    {
+        .name = "UPF - Config Handle",
+        .init = ConfigHandle,
+        .initData = &configFilePath,
+        .term = NULL,
+        .termData = NULL,
+    },
+    {
+        .name = "UPF - Epoll",
+        .init = EpollInit,
+        .initData = NULL,
+        .term = EpollTerm,
+        .termData = NULL,
+    },
+    {
+        .name = "UPF - Event Queue",
+        .init = EventQueueInit,
+        .initData = NULL,
+        .term = EventQueueTerm,
+        .termData = NULL,
+    },
+    {
+        .name = "UPF - Thread",
+        .init = PacketRecvThreadInit,
+        .initData = PacketReceiverThread,
+        .term = PacketRecvThreadTerm,
+        .termData = NULL,
+    },
+    // TODO: This part will be abstract as GtpEnvInit
+    {
+        .name = "UPF - GTP-U Server",
+        .init = GTPv1ServerInit,
+        .initData = NULL,
+        .term = GTPv1ServerTerminate,
+        .termData = NULL,
+    },
+    {
+        .name = "UPF - PFCP",
+        .init = PfcpInit,
+        .initData = NULL,
+        .term = PfcpTerm,
+        .termData = NULL,
+    },
+    // TODO: This part will be abstract as GtpEnvInit
+    {
+        .name = "UPF - Routing Setting",
+        .init = UpRouteInit,
+        .initData = NULL,
+        .term = UpRouteTerminate,
+        .termData = NULL,
+    },
+    {
+        .name = "UPF - Buffer Server",
+        .init = BufferServerInit,
+        .initData = NULL,
+        .term = BufferServerTerminate,
+        .termData = NULL,
+    },
+};
 
-    status = UtltLibInit();
-    if (status != STATUS_OK) return status;
-
-    status = SignalRegister();
-    if (status != STATUS_OK) return status;
-
-    status = UpfContextInit();
-    if (status != STATUS_OK) return status;
-
-    status = UpfLoadConfigFile(configPath);
-    if (status != STATUS_OK) return status;
-
-    status = UpfConfigParse();
-    if (status != STATUS_OK) return status;
-
-    Self()->epfd = EpollCreate();
-    if (Self()->epfd < 0) return STATUS_ERROR;
-
-    Self()->eventQ = EventQueueCreate(O_RDWR | O_NONBLOCK);
-    if (Self()->eventQ <= 0) return STATUS_ERROR;
-
-    status = ThreadCreate(&Self()->pktRecvThread, PacketReceiverThread, NULL);
-    if (status != STATUS_OK) return status;
-
-    status = GTPv1ServerInit();
-    if (status != STATUS_OK) return status;
-
-    status = PfcpServerInit();
-    if (status != STATUS_OK) return status;
-
-    status = PfcpXactInit(&Self()->timerServiceList, UPF_EVENT_N4_T3_RESPONSE,
-                          UPF_EVENT_N4_T3_HOLDING); // init pfcp xact context
-    if (status != STATUS_OK) return status;
-
-    status = UpRouteInit();
-    if (status != STATUS_OK) return status;
-
-    status = BufferServerInit();
-    if (status != STATUS_OK) return status;
-
-    UTLT_Info("UPF initialized");
-
+Status UpfSetConfigPath(char *path) {
+    strcpy(configFilePath, path);
     return STATUS_OK;
 }
 
-Status UpfTerminate() {
+Status UpfInit() {
     Status status = STATUS_OK;
 
-    UTLT_Info("Terminating UPF...");
+    UTLT_Assert(GetAbsPath(configFilePath) == STATUS_OK, 
+        return STATUS_ERROR, "Invalid config path: %s", configFilePath);
+    UTLT_Info("Config: %s", configFilePath);
 
-    UTLT_Assert(BufferServerTerminate() == STATUS_OK, status |= STATUS_ERROR,
-                "Buffer Sock resource free failed");
-
-    UTLT_Assert(UpRouteTerminate() == STATUS_OK, status |= STATUS_ERROR,
-                "GTP routes removal failed");
-
-    UTLT_Assert(PfcpXactTerminate() == STATUS_OK, status |= STATUS_ERROR,
-                "PFCP Transaction terminate failed");
-
-    UTLT_Assert(PfcpServerTerminate() == STATUS_OK, status |= STATUS_ERROR,
-                "PFCP server terminate failed");
-
-    UTLT_Assert(GTPv1ServerTerminate() == STATUS_OK, status |= STATUS_ERROR,
-                "GTPv1 server terminate failed");
-
-    UTLT_Assert(ThreadDelete(Self()->pktRecvThread) == STATUS_OK, status |= STATUS_ERROR,
-                "Thread PacketReceiverThread delete failed");
-
-    UTLT_Assert(EventQueueDelete(Self()->eventQ) == STATUS_OK, status |= STATUS_ERROR,
-                "Event queue delete failed");
-
-    close(Self()->epfd);
-
-    UTLT_Assert(UpfContextTerminate() == STATUS_OK, status |= STATUS_ERROR,
-                "UPF context terminate failed");
-
-    UTLT_Assert(UtltLibTerminate() == STATUS_OK, status |= STATUS_ERROR,
-                "UPF library terminate failed");
-
-    if (status == STATUS_OK)
-        UTLT_Info("UPF terminated");
-    else
-        UTLT_Info("UPF failed to terminate");
-
+    for (int i = 0; i < sizeof(UpfOpsList) / sizeof(UpfOps); i++) {
+        if (UpfOpsList[i].init) {
+            status = UpfOpsList[i].init(UpfOpsList[i].initData);
+            UTLT_Assert(status == STATUS_OK, break,
+                "%s error when UPF initializes", UpfOpsList[i].name);
+        }
+    }
+    
     return status;
 }
 
-Status UtltLibInit() {
-    Status status;
-
-    status = BufblkPoolInit();
-    if (status != STATUS_OK) return status;
-
-    status = ThreadInit();
-    if (status != STATUS_OK) return status;
-
-    status = TimerPoolInit();
-    if (status != STATUS_OK) return status;
-
-    status = SockPoolInit();
-    if (status != STATUS_OK) return status;
-
-    status = Gtpv1DevPoolInit();
-    if (status != STATUS_OK) return status;
-
-    status = TimerPoolInit();
-    if (status != STATUS_OK) return status;
-
-    return STATUS_OK;
-} 
-
-Status UtltLibTerminate() {
+Status UpfTerm() {
     Status status = STATUS_OK;
-
-    UTLT_Assert(Gtpv1DevPoolFinal() == STATUS_OK, status |= STATUS_ERROR,
-                "Gtpv1Dev pool terminate failed");
-
-    UTLT_Assert(SockPoolFinal() == STATUS_OK, status |= STATUS_ERROR,
-                "Socket pool terminate failed");
-
-    UTLT_Assert(TimerFinal() == STATUS_OK, status |= STATUS_ERROR,
-                "Timer pool terminate failed");
-
-    UTLT_Assert(ThreadFinal() == STATUS_OK, status |= STATUS_ERROR,
-                "Thread terminate failed");
-
-    BufblkPoolCheck("UPF Terminate");
-
-    UTLT_Assert(BufblkPoolFinal() == STATUS_OK, status |= STATUS_ERROR,
-                "Bufblk pool terminate failed");
-
+    for (int i = (int)(sizeof(UpfOpsList) / sizeof(UpfOps)) - 1; i >= 0 ; i--) {
+        if (UpfOpsList[i].term) {
+            status = UpfOpsList[i].term(UpfOpsList[i].termData);
+            UTLT_Assert(status == STATUS_OK, break,
+                "%s error when UPF terminates", UpfOpsList[i].name);
+        }
+    }
+    
     return status;
 }
 
-static Status SignalRegister() {
+static void SignalHandler(int sigval) {
+    switch(sigval) {
+        case SIGINT :
+            UTLT_Assert(UpfTerm() == STATUS_OK, , "Handle Ctrl-C fail");
+            break;
+        case SIGTERM :
+            UTLT_Assert(UpfTerm() == STATUS_OK, , "Handle Ctrl-C fail");
+            break;
+        default :
+            break;
+    }
+    exit(0);
+}
+
+static Status SignalRegister(void *data) {
     signal(SIGINT, SignalHandler);
     signal(SIGTERM, SignalHandler);
 
     return STATUS_OK;
 }
 
-static void SignalHandler(int sigval) {
-    switch(sigval) {
-        case SIGINT :
-            UTLT_Assert(UpfTerminate() == STATUS_OK, , "Handle Ctrl-C fail");
-            break;
-        case SIGTERM :
-            UTLT_Assert(UpfTerminate() == STATUS_OK, , "Handle Ctrl-C fail");
-            break;
-        default :
-            break;
-    }
-    exit(0);
+static Status ConfigHandle(void *data) {
+    UTLT_Assert(UpfLoadConfigFile(configFilePath) == STATUS_OK,
+        return STATUS_ERROR, "");
+
+    UTLT_Assert(UpfConfigParse() == STATUS_OK,
+        return STATUS_ERROR, "");
+
+    return STATUS_OK;
+}
+
+static Status EpollInit(void *data) {
+    UTLT_Assert((Self()->epfd = EpollCreate()) >= 0,
+        return STATUS_ERROR, "");
+    
+    return STATUS_OK;
+}
+
+static Status EpollTerm(void *data) {
+    close(Self()->epfd);
+
+    return STATUS_OK;
+}
+
+static Status EventQueueInit(void *data) {
+    Self()->eventQ = EventQueueCreate(O_RDWR | O_NONBLOCK);
+    UTLT_Assert(Self()->eventQ > 0, return STATUS_ERROR, "");
+
+    return STATUS_OK;
+}
+
+static Status EventQueueTerm(void *data) {
+    UTLT_Assert(EventQueueDelete(Self()->eventQ) == STATUS_OK,
+        return STATUS_ERROR, "");
+
+    return STATUS_OK;
+}
+
+static Status PacketRecvThreadInit(void *data) {
+    ThreadFuncType threadFuncPtr = data;
+    
+    UTLT_Assert(ThreadCreate(&Self()->pktRecvThread, threadFuncPtr, NULL) == STATUS_OK,
+        return STATUS_ERROR, "");
+    
+    return STATUS_OK;
+}
+
+static Status PacketRecvThreadTerm(void *data) {
+    UTLT_Assert(ThreadDelete(Self()->pktRecvThread) == STATUS_OK,
+        return STATUS_ERROR, "");
+
+    return STATUS_OK;
 }
 
 void PacketReceiverThread(ThreadID id, void *data) {
@@ -225,4 +297,26 @@ void PacketReceiverThread(ThreadID id, void *data) {
     UTLT_Info("Packet receiver thread terminated");
 
     return;
+}
+
+static Status PfcpInit(void *data) {
+    UTLT_Assert(PfcpServerInit() == STATUS_OK,
+        return STATUS_ERROR, "");
+
+    // init pfcp xact context
+    UTLT_Assert(PfcpXactInit(&Self()->timerServiceList,
+                    UPF_EVENT_N4_T3_RESPONSE, UPF_EVENT_N4_T3_HOLDING) == STATUS_OK,
+        return STATUS_ERROR, "");
+
+    return STATUS_OK;
+}
+
+static Status PfcpTerm(void *data) {
+    UTLT_Assert(PfcpXactTerminate() == STATUS_OK,
+        return STATUS_ERROR, "");
+
+    UTLT_Assert(PfcpServerTerminate() == STATUS_OK,
+        return STATUS_ERROR, "");
+
+    return STATUS_OK;
 }

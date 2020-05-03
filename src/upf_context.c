@@ -15,7 +15,7 @@
 #include "utlt_network.h"
 #include "gtp_header.h"
 #include "gtp_link.h"
-#include "upf.h"
+
 #include "pfcp_message.h"
 #include "pfcp_types.h"
 #include "pfcp_xact.h"

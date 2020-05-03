@@ -30,13 +30,13 @@ static int TimerCmpFunc(ListNode *pnode1, ListNode *pnode2) {
     return (tm1->expireTime < tm2->expireTime ? -1 : 1);
 }
 
-Status TimerPoolInit(void) {
+Status TimerPoolInit() {
     PoolInit(&timerPool, MAX_NUM_OF_TIMER);
 
     return STATUS_OK;
 }
 
-Status TimerFinal(void) {
+Status TimerFinal() {
     if (PoolCap(&timerPool) != PoolSize(&timerPool))
         UTLT_Error("%d not freed in timerPool[%d]",
                     PoolCap(&timerPool) - PoolSize(&timerPool),
@@ -47,7 +47,7 @@ Status TimerFinal(void) {
     return STATUS_OK;
 }
 
-uint32_t TimerGetPoolSize(void) {
+uint32_t TimerGetPoolSize() {
     // The number of available space in this pool
     return PoolSize(&timerPool);
 }
