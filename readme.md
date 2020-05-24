@@ -29,7 +29,6 @@ make -j`nproc`
 ```bash
 cd build/bin
 ./testutlt
-sudo ./testgtpv1
 ```
 
 ### Edit configuration file
@@ -44,7 +43,7 @@ iptables -t nat -A POSTROUTING -o {DN_Interface_Name} -j MASQUERADE
 ### Run
 ```bash
 cd build
-sudo ./bin/free5gc-upfd
+sudo -E ./bin/free5gc-upfd
 ```
 To show usage: `./bin/free5gc-upfd -h`
 

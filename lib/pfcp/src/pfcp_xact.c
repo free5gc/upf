@@ -48,7 +48,7 @@ Status PfcpXactInit(TimerList *timerList, uintptr_t responseEvent, uintptr_t hol
     return STATUS_OK;
 }
 
-Status PfcpXactTerminate(void) {
+Status PfcpXactTerminate() {
     UTLT_Assert(pfcpXactInitialized == 1, return STATUS_ERROR,
                 "PFCP Xact already finalized");
 

@@ -1,10 +1,8 @@
-#include "upf.h"
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
 
-#include "utlt_lib.h"
+#include "upf_init.h"
 #include "utlt_debug.h"
 #include "utlt_event.h"
 #include "utlt_network.h"
@@ -14,8 +12,6 @@
 static Status parseArgs(int argc, char *argv[]);
 static Status checkPermission();
 static void eventConsumer();
-
-char configPath[MAX_FILE_PATH_STRLEN] = "./config/upfcfg.yaml";
 
 int main(int argc, char *argv[]) {
     Status status, returnStatus = STATUS_OK;
@@ -27,7 +23,7 @@ int main(int argc, char *argv[]) {
         return STATUS_ERROR;
     }
 
-    status = UpfInit(configPath);
+    status = UpfInit();
     UTLT_Assert(status == STATUS_OK, returnStatus = STATUS_ERROR,
                 "UPF failed to initialize");
 
@@ -35,7 +31,7 @@ int main(int argc, char *argv[]) {
         eventConsumer();
     }
 
-    status = UpfTerminate();
+    status = UpfTerm();
     UTLT_Assert(status == STATUS_OK, returnStatus = STATUS_ERROR,
                 "UPF terminate error");
 
@@ -48,7 +44,7 @@ static Status parseArgs(int argc, char *argv[]) {
     while ((opt = getopt(argc, argv, "f:h")) != -1) {
         switch (opt) {
             case 'f':
-                strcpy(configPath, optarg);
+                UpfSetConfigPath(optarg);
                 break;
 
             case 'h':
