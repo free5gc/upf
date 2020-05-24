@@ -29,7 +29,6 @@ make -j`nproc`
 ```bash
 cd build/bin
 ./testutlt
-sudo ./testgtpv1
 ```
 
 ### Edit configuration file
