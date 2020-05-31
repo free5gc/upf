@@ -640,7 +640,7 @@ Status UpfN4HandleSessionEstablishmentRequest(UpfSession *session, PfcpXact *pfc
         UTLT_Assert(status == STATUS_OK, cause = PFCP_CAUSE_REQUEST_REJECTED,
                     "Create FAR error");
     }
-    if (request->createPDR[1].presence) {
+    if (request->createFAR[1].presence) {
         status = UpfN4HandleCreateFar(&request->createFAR[1]);
         UTLT_Assert(status == STATUS_OK, cause = PFCP_CAUSE_REQUEST_REJECTED,
                     "Create FAR error");
