@@ -472,7 +472,7 @@ Status UpfN4HandleUpdateFar(UpdateFAR *updateFar) {
         }
     }
     // update Forwarding parameters
-    if (updateFar->updateForwardingParameters.outerHeaderCreation.value) {
+    if (updateFar->updateForwardingParameters.outerHeaderCreation.presence) {
         PfcpOuterHdr *outerHdr = (PfcpOuterHdr *)
             (updateFar->updateForwardingParameters.outerHeaderCreation.value);
         uint16_t description = *((uint16_t *)outerHdr);
