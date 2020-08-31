@@ -109,14 +109,17 @@ Status GtpHandler(Sock *sock, void *data) {
             status = GtpHandleEchoResponse(gtpHdr);
             break;
         case GTPV1_ERROR_INDICATION :
-
+            UTLT_Warning("GTPv1 header type ERROR_INDICATION not implemented");
             break;
         case GTPV1_END_MARK :
             // TODO : Need to deal with the UE packet that does not have tunnel yet
             status = GtpHandleEndMark(sock, gtpHdr);
             break;
-        default :
-            UTLT_Warning("This type[%d] of GTPv1 header does not implement yet", gtpHdr->type);
+        case GTPV1_T_PDU:
+            UTLT_Warning("Got GTPv1 T_PDU packet");
+            break;
+        default:
+            UTLT_Warning("Unknown GTPv1 header type[%d]", gtpHdr->type);
     }
 
 FREEBUFBLK:
