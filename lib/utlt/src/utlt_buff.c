@@ -154,17 +154,10 @@ Status BufblkPoolFinal() {
     return STATUS_OK;
 }
 
-/* TODO: Comment for Release
-#define BufferCheck(__sizeNum) \
-    UTLT_Assert(PoolSize(&bufPool##__sizeNum) == PoolCap(&bufPool##__sizeNum),\
-        , "Memory leak happens in Bufblk"#__sizeNum" , need %d but only %d",\
-        PoolCap(&bufPool##__sizeNum), PoolSize(&bufPool##__sizeNum)); \
-*/
-
 #define BufferCheck(__sizeNum) \
     if (PoolSize(&bufPool##__sizeNum) != PoolCap(&bufPool##__sizeNum)) \
-        UTLT_Debug("Memory leak happens in Bufblk"#__sizeNum" , need %d but only %d",\
-        PoolCap(&bufPool##__sizeNum), PoolSize(&bufPool##__sizeNum));
+        UTLT_Warning("Memory leak happens in Bufblk"#__sizeNum" , need %d but only %d", \
+            PoolCap(&bufPool##__sizeNum), PoolSize(&bufPool##__sizeNum))
 
 void BufblkPoolCheck(const char *showInfo) {
     UTLT_Debug("Memory leak check start: %s", showInfo);

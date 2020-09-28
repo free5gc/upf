@@ -3,14 +3,16 @@
 #include <stdint.h>
 #include <endian.h>
 #include <string.h>
+#include <arpa/inet.h>
 
 #include "upf_context.h"
 #include "utlt_buff.h"
 #include "pfcp_message.h"
 #include "pfcp_convert.h"
-#include "gtp_link.h"
 
 #include "n4_pfcp_build.h"
+
+#include "updk/env.h"
 
 Status UpfN4BuildSessionEstablishmentResponse(Bufblk **bufBlk, uint8_t type,
                                               UpfSession *session, uint8_t cause,
@@ -144,7 +146,7 @@ Status UpfN4BuildSessionReportRequestDownlinkDataReport(Bufblk **bufBlkPtr,
 
     downlinkDataReport->pDRID.presence = 1;
     // This value is store in network type
-    pdrId = pdrId;
+    pdrId = htons(pdrId);
     downlinkDataReport->pDRID.value = &pdrId;
     downlinkDataReport->pDRID.len = sizeof(pdrId);
     // not support yet, TODO
@@ -228,33 +230,40 @@ Status UpfN4BuildAssociationSetupResponse(Bufblk **bufBlkPtr, uint8_t type) {
 
     // network instence
     upIpResourceInformation.assoni = 1;
-    ApnNode *apn = (ApnNode*)ListFirst(&Self()->apnList);
-    size_t apnLen = strlen(apn->apn);
-    unsigned char lenByte = apnLen;
-    memcpy(upIpResourceInformation.networkInstance, &lenByte, 1);
-    memcpy(upIpResourceInformation.networkInstance + 1, apn->apn, apnLen + 1);
+    DNN *dnn;
+    uint8_t dnnLen = 0;
+    EnvParamsForEachDNN(dnn, Self()->envParams) {
+        dnnLen = strlen(dnn->name);
+        memcpy(upIpResourceInformation.networkInstance, &dnnLen, 1);
+        memcpy(upIpResourceInformation.networkInstance + 1, dnn->name, dnnLen + 1);
+        break;
+    }
 
     // TODO: better algo. to select establish IP
-    Gtpv1TunDevNode *gtpDev4 =
-        (Gtpv1TunDevNode *)ListFirst(&Self()->gtpv1DevList);
-    Gtpv1TunDevNode *gtpDev6 =
-        (Gtpv1TunDevNode *)ListFirst(&Self()->gtpv1v6DevList);
-    upIpResourceInformation.v4 =
-        (gtpDev4 && gtpDev4->sock) ? 1 : 0;
-    upIpResourceInformation.v6 =
-        (gtpDev6 && gtpDev6->sock) ? 1 : 0;
-    if (upIpResourceInformation.v4) {
-        upIpResourceInformation.addr4 = gtpDev4->sock->localAddr.s4.sin_addr;
-    }
-    if (upIpResourceInformation.v6) {
-        // TODO: ipv6
-        //upIpResourceInformation.addr6 = gtpDev6->sock->localAddr.s6.sin6_addr;
+    int isIpv6 = 0;
+    VirtualPort *port;
+    VirtualDeviceForEachVirtualPort(port, Self()->envParams->virtualDevice) {
+        isIpv6 = (strchr(port->ipStr, ':') ? 1 : 0);
+        if (!upIpResourceInformation.v4 && !isIpv6) {
+            UTLT_Assert(inet_pton(AF_INET, port->ipStr, &upIpResourceInformation.addr4) == 1,
+                continue, "IP address[%s] in VirtualPort is invalid", port->ipStr);
+            upIpResourceInformation.v4 = 1;
+        }
+        /* TODO: IPv6
+        if (!upIpResourceInformation.v6 && isIpv6) {
+            UTLT_Assert(inet_pton(AF_INET6, port->ipStr, &upIpResourceInformation.addr6) == 1,
+                continue, "IP address[%s] in VirtualPort is invalid", port->ipStr);
+            upIpResourceInformation.v6 = 1;
+        }
+        */
+        if (upIpResourceInformation.v4 && upIpResourceInformation.v6)
+            break;
     }
 
     response->userPlaneIPResourceInformation.presence = 1;
     response->userPlaneIPResourceInformation.value = &upIpResourceInformation;
     // TODO: this is only IPv4, no network instence, no source interface
-    response->userPlaneIPResourceInformation.len = 2+4+1+apnLen;
+    response->userPlaneIPResourceInformation.len = 2+4+1+dnnLen;
     // HACK: sizeof(Internet) == 8, hardcord
     //response->userPlaneIPResourceInformation.len =
     //sizeof(PfcpUserPlaneIpResourceInformation);

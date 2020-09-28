@@ -16,9 +16,14 @@
 #include "utlt_timer.h"
 
 #include "pfcp_node.h"
-#include "gtp_path.h"
 #include "pfcp_message.h"
-#include "libgtp5gnl/gtp5g.h"
+
+#include "up/up_match.h"
+
+#include "updk/env.h"
+#include "updk/init.h"
+#include "updk/rule_pdr.h"
+#include "updk/rule_far.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -29,10 +34,15 @@ typedef struct _UpfDev       UpfDev;
 typedef struct gtp5g_pdr     UpfPdr;
 typedef struct gtp5g_far     UpfFar;
 typedef struct _UpfBufPacket UpfBufPacket;
-typedef struct _UpfPdrId     UpfPdrId;
-typedef struct _UpfBar       UpfBar;
-typedef struct _UpfQer       UpfQer;
-typedef struct _UpfUrr       UpfUrr;
+
+// Rule structure dependent on UPDK
+typedef UPDK_PDR UpfPDR;
+typedef UPDK_FAR UpfFAR;
+/*
+typedef UPDK_QER UpfQER;
+typedef UPDK_BAR UpfBAR;
+typedef UPDK_URR UpfURR;
+*/
 
 typedef enum _UpfEvent {
 
@@ -46,21 +56,19 @@ typedef enum _UpfEvent {
 } UpfEvent;
 
 typedef struct {
+    uint8_t         role;                // UpfRole
     const char      *gtpDevNamePrefix;   // Default : "upfgtp"
 
-    ListNode        gtpInterfaceList;    // name of interface (char*)
+    ListHead        gtpInterfaceList;    // name of interface (char*)
     // Add context related to GTP-U here
     uint16_t        gtpv1Port;           // Default : GTP_V1_PORT
-    int             gtpv1DevSN;          // Serial number for naming gtpv1Dev, gtpv1v6Dev
-    ListNode        gtpv1DevList;        // GTPv1 IPv4 Device Socket (Gtpv1TunDevNode)
-    ListNode        gtpv1v6DevList;      // GTPv1 IPv6 Device Socket (Gtpv1TunDevNode)
-    SockAddr        *gtpv1Addr;          // GTPv1 IPv4 Address
-    SockAddr        *gtpv1Addr6;         // GTPv1 IPv6 Address
+    EnvParams       *envParams;          // EnvParams parsing from UPF Config
+    Sock            upSock;              // User Plane Socket builds from Gtpv1EnvInit()
 
     // Add context related to PFCP here
     uint16_t        pfcpPort;            // Default : PFCP_PORT
-    ListNode        pfcpIPList;          // PFCP IPv4 Server List (SockNode)
-    ListNode        pfcpIPv6List;        // PFCP IPv6 Server List (SockNode)
+    ListHead        pfcpIPList;          // PFCP IPv4 Server List (SockNode)
+    ListHead        pfcpIPv6List;        // PFCP IPv6 Server List (SockNode)
     Sock            *pfcpSock;           // IPv4 Socket
     Sock            *pfcpSock6;          // IPv6 Socket
     SockAddr        *pfcpAddr;           // IPv4 Address
@@ -79,14 +87,14 @@ typedef struct {
     const char      *dns6[MAX_NUM_OF_DNS];
 
     // Add other context here
-    ListNode        ranS1uList;         // RAN List connected to UPF
-    ListNode        upfN4List;          // UPF PFCP Node List
-    ListNode        apnList;
+    ListHead        ranS1uList;         // RAN List connected to UPF
+    ListHead        upfN4List;          // UPF PFCP Node List
+    ListHead        dnnList;
 
     // Different list of policy rule
     // TODO: if implementing QER in kernel, remove these list
-    ListNode        qerList;
-    ListNode        urrList;
+    ListHead        qerList;
+    ListHead        urrList;
 
     uint32_t        recoveryTime;       // UTC time
     TimerList       timerServiceList;
@@ -96,7 +104,7 @@ typedef struct {
     EvtQId          eventQ;             // Event queue communicate between UP and CP
     ThreadID        pktRecvThread;      // Receive packet thread
 
-    // Session : hash(IMSI+APN)
+    // Session : hash(IMSI+DNN)
     Hash            *sessionHash;
     // Save buffer packet here
     Hash            *bufPacketHash;
@@ -127,7 +135,7 @@ typedef struct _UpfSession {
     uint64_t        upfSeid;
     uint64_t        smfSeid;
 
-    /* APN Config */
+    /* DNN Config */
     Pdn             pdn;
     UpfUeIp         ueIpv4;
     UpfUeIp         ueIpv6;
@@ -137,20 +145,26 @@ typedef struct _UpfSession {
     //ECgi          eCgi; // For LTE E-UTRA Cell ID
     //NCgi          nCgi; // For 5GC NR Cell ID
 
-    /* Hashed key: hash(IMSI+APN) */
-    uint8_t         hashKey[MAX_IMSI_LEN+MAX_APN_LEN];
+    /* Hashed key: hash(IMSI+DNN) */
+    uint8_t         hashKey[MAX_IMSI_LEN+MAX_DNN_LEN];
     int             hashKeylen;
 
     /* GTP, PFCP context */
     //SockNode        *gtpNode;
     PfcpNode        *pfcpNode;
-    ListNode        pdrIdList;
+    ListHead        pdrIdList;
+
+    ListHead        pdrList;
+    ListHead        farList;
+    ListHead        qerList;
+    ListHead        barList;
+    ListHead        urrList;
 
 } UpfSession;
 
 // Used for buffering, Index type for each PDR
 typedef struct _UpfBufPacket {
-    //ListNode        node;
+    //ListHead        node;
     int             index;
 
     // If sessionPtr == NULL, this PDR don't exist
@@ -160,76 +174,110 @@ typedef struct _UpfBufPacket {
     Bufblk          *packetBuffer;
 } UpfBufPakcet;
 
-typedef struct _UpfPdrId {
-    ListNode        node;
-    int             index;
+typedef struct {
+    ListHead node;
+    int index;
 
-    uint16_t        pdrId;
-} UpfPdrId;
+    UpfPDR pdr;
 
-typedef struct _UpfUrr {
-    ListNode        node;
-    int             index;
+    MatchRuleNode *matchRule;
+} UpfPDRNode;
 
-    uint16_t        urrId;
-    uint16_t        referenceCount;
+typedef struct {
+    ListHead node;
+    int index;
 
-    PfcpNode        *pfcpNode;
-} UpfUrr;
+    UpfFAR far;
+} UpfFARNode;
 
-typedef struct _UpfQer {
-    ListNode        node;
-    int             index;
+typedef struct {
+    ListHead node;
+    int index;
 
-    uint16_t        qerId;
-    uint16_t        referenceCount;
+    // UpfQER qer;
+} UpfQERNode;
 
-    PfcpNode        *pfcpNode;
-} UpfQer;
+typedef struct {
+    ListHead node;
+    int index;
 
-typedef struct _UpfBar {
-    ListNode        node;
-    int             index;
+    // UpfBAR bar;
+} UpfBARNode;
 
-    uint16_t        barId;
-    uint16_t        referenceId;
+typedef struct {
+    ListHead node;
+    int index;
 
-    PfcpNode        *pfcpNode;
-} UpfBar;
-
-typedef struct _ApnNode {
-    ListNode      node;
-    char          apn[MAX_APN_LEN + 1];
-    char          subnetIP[INET6_ADDRSTRLEN];
-    char          natifname[IF_NAMESIZE];
-    uint8_t       subnetPrefix;
-} ApnNode;
+    // UpfURR urr;
+} UpfURRNode;
 
 UpfContext *Self();
 Status UpfContextInit();
 Status UpfContextTerminate();
 
-// APN / PDR / FAR
-ApnNode *UpfApnAdd(const char *apnName, const char *ip, const char *prefix, const char *natifname);
-Status UpfApnRemoveAll();
+// Rules
+UpfPDRNode *UpfPDRNodeAlloc();
+UpfFARNode *UpfFARNodeAlloc();
+UpfQERNode *UpfQERNodeAlloc();
+UpfBARNode *UpfBARNodeAlloc();
+UpfURRNode *UpfURRNodeAlloc();
+
+void UpfPDRNodeFree(UpfPDRNode *node);
+void UpfFARNodeFree(UpfFARNode *node);
+void UpfQERNodeFree(UpfQERNode *node);
+void UpfBARNodeFree(UpfBARNode *node);
+void UpfURRNodeFree(UpfURRNode *node);
+
+int UpfPDRFindByID(uint16_t id, void *ruleBuf);
+int UpfFARFindByID(uint32_t id, void *ruleBuf);
+/*
+int UpfQERFindByID(uint32_t id, void *ruleBuf);
+int UpfBARFindByID(uint32_t id, void *ruleBuf);
+int UpfURRFindByID(uint32_t id, void *ruleBuf);
+*/
+
+Status HowToHandleThisPacket(uint32_t farID, uint8_t *action);
+
+void UpfPDRDump();
+void UpfFARDump();
+/*
+void UpfQERDump();
+void UpfBARDump();
+void UpfURRDump();
+*/
+
+UpfPDRNode *UpfPDRRegisterToSession(UpfSession *sess, UpfPDR *rule);
+UpfFARNode *UpfFARRegisterToSession(UpfSession *sess, UpfFAR *rule);
+/*
+UpfQERNode *UpfQERRegisterToSession(UpfSession *sess, UpfQER *rule);
+UpfBARNode *UpfBARRegisterToSession(UpfSession *sess, UpfBAR *rule);
+UpfURRNode *UpfURRRegisterToSession(UpfSession *sess, UpfURR *rule);
+*/
+
+Status UpfPDRDeregisterToSessionByID(UpfSession *sess, uint16_t id);
+Status UpfFARDeregisterToSessionByID(UpfSession *sess, uint32_t id);
+/*
+Status UpfQERDeregisterToSessionByID(UpfSession *sess, uint32_t id);
+Status UpfBARDeregisterToSessionByID(UpfSession *sess, uint32_t id);
+Status UpfURRDeregisterToSessionByID(UpfSession *sess, uint32_t id);
+*/
 
 // BufPacket
 HashIndex *UpfBufPacketFirst();
 HashIndex *UpfBufPacketNext(HashIndex *hashIdx);
-UpfPdrId *UpfPdrIdAdd(uint16_t pdrId);
-Status UpfPdrIdRemove(UpfPdrId *pdrIdPtr);
 UpfBufPacket *UpfBufPacketThis(HashIndex *hashIdx);
 UpfBufPacket *UpfBufPacketFindByPdrId(uint16_t pdrId);
 UpfBufPacket *UpfBufPacketAdd(const UpfSession * const session,
                               const uint16_t pdrId);
 Status UpfBufPacketRemove(UpfBufPacket *bufPacket);
 Status UpfBufPacketRemoveAll();
+
 // Session
 HashIndex *UpfSessionFirst();
 HashIndex *UpfSessionNext(HashIndex *hashIdx);
 UpfSession *UpfSessionThis(HashIndex *hashIdx);
-void SessionHashKeygen(uint8_t *out, int *outLen, uint8_t *imsi, int imsiLen, uint8_t *apn);
-UpfSession *UpfSessionAdd(PfcpUeIpAddr *ueIp, uint8_t *apn, uint8_t pdnType);
+void SessionHashKeygen(uint8_t *out, int *outLen, uint8_t *imsi, int imsiLen, uint8_t *dnn);
+UpfSession *UpfSessionAdd(PfcpUeIpAddr *ueIp, uint8_t *dnn, uint8_t pdnType);
 Status UpfSessionRemove(UpfSession *session);
 Status UpfSessionRemoveAll();
 UpfSession *UpfSessionFind(uint32_t idx);

@@ -44,6 +44,7 @@
     pthread_mutex_unlock(&(__nameptr)->lock); \
 } while(0)
 
+
 #define PoolFree(__nameptr, __assignedPtr) do { \
     pthread_mutex_lock(&(__nameptr)->lock); \
     if (PoolSize(__nameptr) < (__nameptr)->qCap) { \
@@ -56,6 +57,7 @@
     } \
     pthread_mutex_unlock(&(__nameptr)->lock); \
 } while(0)
+
 
 #define PoolUsedCheck(__pname) (PoolCap(__pname) - PoolSize(__pname))
 

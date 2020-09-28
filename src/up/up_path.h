@@ -17,10 +17,9 @@ Status GtpHandleEchoRequest(Sock *sock, void *data);
 Status GtpHandleEchoResponse(void *data);
 Status GtpHandleEndMark(Sock *sock, void *data);
 
-Status BufferServerInit();
-Status BufferServerTerminate();
 Status BufferHandler(Sock *sock, void *data);
 
-Status UpSendPacketByPdrFar(UpfPdr *pdr, UpfFar *far, Sock *sock);
+Status UpSendPacketByPdrFar(UpfPDR *pdr, UpfFAR *far, Sock *sock);
+
 
 #endif /* __UP_PATH_H_ */

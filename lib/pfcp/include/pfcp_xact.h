@@ -17,7 +17,7 @@ extern "C" {
 #endif /* __cplusplus */
 
 typedef struct _PfcpXact {
-    ListNode    node;
+    ListHead    node;
     uint32_t    index;
 
 #define PFCP_LOCAL_ORIGINATOR  0

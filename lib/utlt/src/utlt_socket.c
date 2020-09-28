@@ -48,7 +48,7 @@ Sock *SocketAlloc() {
     sock->handler = NULL;
     sock->data = NULL;
 
-    sock->epollMode = EPOLLIN | EPOLLET;
+    sock->epollMode = EPOLLIN;
 
     return sock;
 }
@@ -67,44 +67,41 @@ Status SockFree(Sock *sock) {
     return STATUS_OK;
 }
 
-Status SockListFree(ListNode *list) {
+Status SockListFree(ListHead *list) {
     Status status;
-    SockNode *snode;
+    SockNode *node, *nextNode = NULL;
 
     UTLT_Assert(list, return STATUS_ERROR, "null list");
 
-    for (snode = ListFirst(list); snode; snode = ListNext(snode)) {
-        status = SockFree(snode->sock);
+    ListForEachSafe(node, nextNode, list) {
+        status = SockFree(node->sock);
         UTLT_Assert(status == STATUS_OK, return STATUS_ERROR, "");
+
     }
 
     return STATUS_OK;
 }
 
-SockNode *SockNodeListAdd(ListNode *list, const char *ip) {
+SockNode *SockNodeListAdd(ListHead *list, const char *ip) {
     UTLT_Assert(list, return NULL, "");
     UTLT_Assert(strlen(ip) < INET6_ADDRSTRLEN, return NULL, "");
 
     SockNode *node;
     PoolAlloc(&sockNodePool, node);
     UTLT_Assert(node, return NULL, "");
-    ListAppend(list, node);
-
+    ListInsert(node, list);
     strcpy(node->ip, ip);
 
     return node;
 }
 
-Status SockNodeListFree(ListNode *list) {
+Status SockNodeListFree(ListHead *list) {
     UTLT_Assert(list, return STATUS_ERROR, "");
 
     SockNode *node, *nextNode;
 
-    node = ListFirst(list);
-    while (node) {
-        nextNode = (SockNode *)ListNext(node);
-        ListRemove(list, node);
-        node = nextNode;
+    ListForEachSafe(node, nextNode, list) { 
+        ListRemove(node);
     }
 
     return STATUS_OK;

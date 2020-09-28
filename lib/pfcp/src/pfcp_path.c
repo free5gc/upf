@@ -80,32 +80,32 @@ Status PfcpConnect(Sock *sockv4, Sock *sockv6, PfcpNode *node) {
     return STATUS_OK;
 }
 
-Status PfcpServerList(ListNode *list, SockHandler handler, int epfd) {
+Status PfcpServerList(ListHead *list, SockHandler handler, int epfd) {
     Status status;
-    SockNode *snode = NULL;
+    SockNode *node, *nextNode = NULL;
 
     UTLT_Assert(list, return STATUS_ERROR, "Server list error");
     UTLT_Assert(handler, return STATUS_ERROR, "handler error");
 
-    for (snode = ListFirst(list); snode; snode = ListNext(snode)) {
-        status = PfcpServer(snode, handler);
+    ListForEachSafe(node, nextNode, list) {
+        status = PfcpServer(node, handler);
         UTLT_Assert(status == STATUS_OK, return STATUS_ERROR, "create server error");
-        status = EpollRegisterEvent(epfd, snode->sock);
+        status = EpollRegisterEvent(epfd, node->sock);
         UTLT_Assert(status == STATUS_OK, return STATUS_ERROR, "PFCP Sock Register to epoll error");
     }
+    
 
     return STATUS_OK;
 }
 
-Sock *PfcpLocalSockFirst(ListNode *list) {
-    SockNode *snode = NULL;
+Sock *PfcpLocalSockFirst(ListHead *list) {
+    SockNode *node, *nextNode = NULL;
     Sock *sock = NULL;
 
     UTLT_Assert(list, return NULL, "list error");
 
-    for (snode = ListFirst(list); snode; snode = ListNext(snode))
-    {
-        sock = snode->sock;
+    ListForEachSafe(node, nextNode, list) {
+        sock = node->sock;
         if (sock) {
             return sock;
         }
@@ -114,14 +114,14 @@ Sock *PfcpLocalSockFirst(ListNode *list) {
     return NULL;
 }
 
-SockAddr *PfcpLocalAddrFirst(ListNode *list) {
-    SockNode *snode = NULL;
+SockAddr *PfcpLocalAddrFirst(ListHead *list) {
+    SockNode *node, *nextNode = NULL;
     SockAddr *addr = NULL;
 
     UTLT_Assert(list, return NULL, "list error");
 
-    for (snode = ListFirst(list); snode; snode = ListNext(snode)) {
-        addr = &snode->sock->localAddr;
+    ListForEachSafe(node, nextNode, list) {
+        addr = &node->sock->localAddr;
         if (addr) {
             return addr;
         }

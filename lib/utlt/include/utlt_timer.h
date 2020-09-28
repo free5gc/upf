@@ -25,8 +25,8 @@ extern "C" {
 #define TIMER_TYPE_ONCE     1
 
 typedef struct _TimerList {
-    ListNode active;
-    ListNode idle;
+    ListHead active;
+    ListHead idle;
 } TimerList;
 
 typedef uintptr_t TimerBlkID;

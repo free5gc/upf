@@ -70,7 +70,7 @@ typedef struct _Ip {
 
 // List of socket node
 typedef struct _SockNode {
-    ListNode node;
+    ListHead node;
     char ip[INET6_ADDRSTRLEN];
     Sock* sock;
 } SockNode;
@@ -80,9 +80,9 @@ Status SockPoolInit();
 Status SockPoolFinal();
 Sock *SockCreate(int domain, int type, int protocol);
 Status SockFree(Sock *sock);
-Status SockListFree(ListNode *list);
-SockNode *SockNodeListAdd(ListNode *list, const char *ip);
-Status SockNodeListFree(ListNode *list);
+Status SockListFree(ListHead *list);
+SockNode *SockNodeListAdd(ListHead *list, const char *ip);
+Status SockNodeListFree(ListHead *list);
 
 Status SockBind(Sock *sock, SockAddr *sockAddr);
 Status SockConnect(Sock *sock, SockAddr *sockAddr);

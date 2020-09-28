@@ -15,7 +15,7 @@ typedef struct {
 } TestCase;
 
 typedef struct {
-    ListNode node;
+    ListHead node;
     TestCase test;
 } TestNode;
 
@@ -23,7 +23,7 @@ typedef struct {
     int totalCase;
     int finishCase;
     
-    ListNode node;
+    ListHead node;
 } TestContext;
 
 Status TestInit();

@@ -7,11 +7,11 @@
 #define SIZE_OF_LIST 6
 
 typedef struct _ListType {
-    ListNode node;
+    ListHead node;
     int cmpItem;
 } ListType;
 
-ListNode testList;
+ListHead testList ={NULL, NULL};
 
 int listCompare(ListType *pNode1, ListType *pNode2) {
     if (pNode1->cmpItem == pNode2->cmpItem)
@@ -29,63 +29,79 @@ Status TestList_1() {
     for (i = 0; i < SIZE_OF_LIST; i++)
         testNode[i].cmpItem = i;
 
-    ListInit(&testList);
-    UTLT_Assert(ListIsEmpty(&testList), return STATUS_ERROR, "The list is not NULL");
+    ListHeadInit(&testList);
 
-    iter = ListFirst(&testList);
-    UTLT_Assert(iter == NULL, return STATUS_ERROR, "The first node of list is not NULL");
-
-    ListAppend(&testList, &testNode[0]);
+    ListInsert(&testNode[0], &testList);
 
     iter = ListFirst(&testList);
     UTLT_Assert(iter == &testNode[0], return STATUS_ERROR, "List append error : need %d, not %d", &testNode[0], iter);
+   
+    ListInsert(&testNode[1], &testList);
+    iter = ListFirst(&testList);
+    UTLT_Assert(iter == &testNode[1], return STATUS_ERROR, "List append error : need %d, not %d", &testNode[1], iter);
+    
     iter = ListNext(iter);
-    UTLT_Assert(iter == NULL, return STATUS_ERROR, "The next node of list is not NULL");
+    UTLT_Assert(iter == &testNode[0], return STATUS_ERROR, "List append error : need %d, not %d", &testNode[0], iter);
 
-    iter = ListLast(&testList);
-    UTLT_Assert(iter == &testNode[0], return STATUS_ERROR, "List last error : need %d, not %d", &testNode[0], iter);
+    ListInsert(&testNode[2], &testNode[0]);
+    iter = ListFirst(&testList);
+    iter = ListNext(iter);
+    iter = ListNext(iter);
+    UTLT_Assert(iter == &testNode[2], return STATUS_ERROR, "List append error : need %d, not %d", &testNode[2], iter);
     iter = ListPrev(iter);
-    UTLT_Assert(iter == NULL, return STATUS_ERROR, "The previous node of list is not NULL");
+    UTLT_Assert(iter == &testNode[0], return STATUS_ERROR, "List append error : need %d, not %d", &testNode[0], iter);
 
-    ListAppend(&testList, &testNode[1]);
-    ListAppend(&testList, &testNode[2]);
-
-    ListInsertToPrev(&testList, &testNode[0], &testNode[3]);
-    ListInsertToPrev(&testList, &testNode[1], &testNode[4]);
-    ListInsertToPrev(&testList, &testNode[2], &testNode[5]);
+    ListInsert(&testNode[3], &testNode[0]);
+    ListInsert(&testNode[4], &testNode[1]);
+    ListInsert(&testNode[5], &testNode[2]);
 
     iter = ListFirst(&testList);
-    UTLT_Assert(iter == &testNode[3], return STATUS_ERROR, "List insert to previous error : need %d, not %d", &testNode[0], iter);
+    UTLT_Assert(iter == &testNode[1], return STATUS_ERROR, "List insert to previous error : need %d, not %d", &testNode[1], iter);
+    iter = ListNext(iter);
+    UTLT_Assert(iter == &testNode[4], return STATUS_ERROR, "List insert to previous error : need %d, not %d", &testNode[4], iter);
     iter = ListNext(iter);
     UTLT_Assert(iter == &testNode[0], return STATUS_ERROR, "List insert to previous error : need %d, not %d", &testNode[0], iter);
     iter = ListNext(iter);
-    UTLT_Assert(iter == &testNode[4], return STATUS_ERROR, "List insert to previous error : need %d, not %d", &testNode[0], iter);
+    UTLT_Assert(iter == &testNode[3], return STATUS_ERROR, "List insert to previous error : need %d, not %d", &testNode[3], iter);
     iter = ListNext(iter);
-    UTLT_Assert(iter == &testNode[1], return STATUS_ERROR, "List insert to previous error : need %d, not %d", &testNode[0], iter);
+    UTLT_Assert(iter == &testNode[2], return STATUS_ERROR, "List insert to previous error : need %d, not %d", &testNode[2], iter);
     iter = ListNext(iter);
-    UTLT_Assert(iter == &testNode[5], return STATUS_ERROR, "List insert to previous error : need %d, not %d", &testNode[0], iter);
-    iter = ListNext(iter);
-    UTLT_Assert(iter == &testNode[2], return STATUS_ERROR, "List insert to previous error : need %d, not %d", &testNode[0], iter);
-    iter = ListNext(iter);
-    UTLT_Assert(iter == NULL, return STATUS_ERROR, "The next node of list is not NULL");
-
-    ListRemove(&testList, &testNode[3]);
-    ListRemove(&testList, &testNode[4]);
-    ListRemove(&testList, &testNode[5]);
-
+    UTLT_Assert(iter == &testNode[5], return STATUS_ERROR, "List insert to previous error : need %d, not %d", &testNode[5], iter);
+    
+    ListRemove(&testNode[3]);
     iter = ListFirst(&testList);
-    UTLT_Assert(iter == &testNode[0], return STATUS_ERROR, "List remove error : need %d, not %d", &testNode[0], iter);
+    UTLT_Assert(iter == &testNode[1], return STATUS_ERROR, "List insert to previous error : need %d, not %d", &testNode[1], iter);
     iter = ListNext(iter);
-    UTLT_Assert(iter == &testNode[1], return STATUS_ERROR, "List remove error : need %d, not %d", &testNode[0], iter);
+    UTLT_Assert(iter == &testNode[4], return STATUS_ERROR, "List insert to previous error : need %d, not %d", &testNode[4], iter);
     iter = ListNext(iter);
-    UTLT_Assert(iter == &testNode[2], return STATUS_ERROR, "List remove error : need %d, not %d", &testNode[0], iter);
+    UTLT_Assert(iter == &testNode[0], return STATUS_ERROR, "List insert to previous error : need %d, not %d", &testNode[0], iter);
     iter = ListNext(iter);
-    UTLT_Assert(iter == NULL, return STATUS_ERROR, "The next node of list is not NULL");
+    UTLT_Assert(iter == &testNode[2], return STATUS_ERROR, "List insert to previous error : need %d, not %d", &testNode[2], iter);
+    iter = ListNext(iter);
+    UTLT_Assert(iter == &testNode[5], return STATUS_ERROR, "List insert to previous error : need %d, not %d", &testNode[5], iter);
+    
+    ListRemove(&testNode[4]);
+    iter = ListFirst(&testList);
+    UTLT_Assert(iter == &testNode[1], return STATUS_ERROR, "List insert to previous error : need %d, not %d", &testNode[1], iter);
+    iter = ListNext(iter);
+    UTLT_Assert(iter == &testNode[0], return STATUS_ERROR, "List insert to previous error : need %d, not %d", &testNode[0], iter);
+    iter = ListNext(iter);
+    UTLT_Assert(iter == &testNode[2], return STATUS_ERROR, "List insert to previous error : need %d, not %d", &testNode[2], iter);
+    iter = ListNext(iter);
+    UTLT_Assert(iter == &testNode[5], return STATUS_ERROR, "List insert to previous error : need %d, not %d", &testNode[5], iter);
+    
+    ListRemove(&testNode[5]);
+    iter = ListFirst(&testList);
+    UTLT_Assert(iter == &testNode[1], return STATUS_ERROR, "List insert to previous error : need %d, not %d", &testNode[1], iter);
+    iter = ListNext(iter);
+    UTLT_Assert(iter == &testNode[0], return STATUS_ERROR, "List insert to previous error : need %d, not %d", &testNode[0], iter);
+    iter = ListNext(iter);
+    UTLT_Assert(iter == &testNode[2], return STATUS_ERROR, "List insert to previous error : need %d, not %d", &testNode[2], iter);
 
-    ListRemove(&testList, &testNode[0]);
-    ListRemove(&testList, &testNode[1]);
-    ListRemove(&testList, &testNode[2]);
-    UTLT_Assert(ListIsEmpty(&testList), return STATUS_ERROR, "The list is not NULL");
+    ListRemove(&testNode[0]);
+    ListRemove(&testNode[1]);
+    ListRemove(&testNode[2]);
+    UTLT_Assert( testList.prev == testList.next, return STATUS_ERROR, "The list is not NULL");
 
     return STATUS_OK;
 }
@@ -105,21 +121,21 @@ Status TestList_2() {
         testNode[i].cmpItem = i;
 
     for (i = 0; i < 24; i++) {
-        ListInit(&testList);
-        UTLT_Assert(ListIsEmpty(&testList), return STATUS_ERROR, "The list is not NULL");
+        ListHeadInit(&testList);
 
         for (j = 0; j < 4; j++)
-            ListInsertSorted(&testList, &testNode[order[i][j]], &listCompare);
-
+            ListInsertSorted(&testNode[order[i][j]], &testList, &listCompare);
         j = 0;
         iter = ListFirst(&testList);
         while (iter) {
             UTLT_Assert(iter->cmpItem == j, return STATUS_ERROR, "List insert sorted error : need %d, not %d", j, iter->cmpItem);
             j++;
             iter = ListNext(iter);
+            if (testList.next == (ListHead *)iter->node.next) {
+                break;
+            }
         }
     }
-
     return STATUS_OK;
 }
 

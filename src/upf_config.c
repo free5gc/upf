@@ -1,8 +1,10 @@
 #include "upf_config.h"
 
+#include <arpa/inet.h>
+
 #include "upf_context.h"
 #include "utlt_yaml.h"
-#include "gtp_link.h"
+#include "updk/env.h"
 
 static int SetProtocolIter(YamlIter *protoList, YamlIter *protoIter);
 // static Status ReadAddrList(YamlIter *protoIter, const char **hostname, int *num);
@@ -27,10 +29,9 @@ Status UpfLoadConfigFile(const char *configFilePath) {
 
     document = UTLT_Calloc(1, sizeof(yaml_document_t));
     
-    if (!yaml_parser_load(&parser, document)) {
-        UTLT_Free(document);
-        yaml_parser_delete(&parser);
-    }
+    UTLT_Assert(yaml_parser_load(&parser, document), UTLT_Free(document), "YAML parser load failed");
+
+    yaml_parser_delete(&parser);
 
 FREEFD:
     UTLT_Assert(!fclose(file), status = STATUS_ERROR, "Fail to close yaml file");
@@ -61,6 +62,16 @@ Status UpfConfigParse() {
                     UTLT_Assert(UTLT_SetLogLevel(logLevel) == STATUS_OK,
                                 return STATUS_ERROR, "");
 
+                } else if (!strcmp(upfKey, "ReportCaller")) {
+                    const char *reportCaller = YamlIterGet(&upfIter, GET_VALUE);
+                    if (!strcmp(reportCaller, "true")) {
+                        UTLT_Assert(UTLT_SetReportCaller(REPORTCALLER_TRUE) == STATUS_OK, return STATUS_ERROR, "");
+                    } else if (!strcmp(reportCaller, "false")) {
+                        UTLT_Assert(UTLT_SetReportCaller(REPORTCALLER_FALSE) == STATUS_OK, return STATUS_ERROR, "");
+                    } else {
+                        // Always fail here
+                        UTLT_Assert(UTLT_SetReportCaller(REPORTCALLER_MAX) == STATUS_OK, return STATUS_ERROR, "ReportCaller is invalid");
+                    }
                 } else if (!strcmp(upfKey, "gtpu")) {
                     YamlIter gtpuList, gtpuIter;
                     YamlIterChild(&upfIter, &gtpuList);
@@ -139,45 +150,62 @@ Status UpfConfigParse() {
 
                     } while (YamlIterType(&pfcpList) == YAML_SEQUENCE_NODE);
                     
-                } else if (!strcmp(upfKey, "apn_list")) {
-                    YamlIter apnList, apnIter;
-                    YamlIterChild(&upfIter, &apnList);
+                } else if (!strcmp(upfKey, "dnn_list")) {
+                    YamlIter dnnList, dnnIter;
+                    YamlIterChild(&upfIter, &dnnList);
 
                     do {
-                        const char *apn = NULL;
+                        const char *dnnName = NULL;
                         const char *ipStr = NULL;
                         const char *mask = NULL;
                         const char *natifname = NULL;
 
-                        if (SetProtocolIter(&apnList, &apnIter))
+                        if (SetProtocolIter(&dnnList, &dnnIter))
                             break;
 
-                        while (YamlIterNext(&apnIter)) {
-                            const char *apnKey = YamlIterGet(&apnIter, GET_KEY);
-                            UTLT_Assert(apnKey, return STATUS_ERROR, "The apnKey is NULL");
+                        while (YamlIterNext(&dnnIter)) {
+                            const char *dnnKey = YamlIterGet(&dnnIter, GET_KEY);
+                            UTLT_Assert(dnnKey, return STATUS_ERROR, "The dnnKey is NULL");
 
-                            if (!strcmp(apnKey, "apn")) {
-                                apn = (char *)YamlIterGet(&apnIter, GET_VALUE);
-                            } else if (!strcmp(apnKey, "cidr")) {
-                                char *val = (char *)YamlIterGet(&apnIter, GET_VALUE);
+                            if (!strcmp(dnnKey, "dnn")) {
+                                dnnName = (char *)YamlIterGet(&dnnIter, GET_VALUE);
+                            } else if (!strcmp(dnnKey, "cidr")) {
+                                char *val = (char *)YamlIterGet(&dnnIter, GET_VALUE);
                                 
                                 if (val) {
                                     ipStr = (const char *)strsep(&val, "/");
                                     if (ipStr)
                                         mask = (const char *)val;
                                 }
-                            } else if (!strcmp(apnKey, "natifname")) {
-                                natifname = (char *)YamlIterGet(&apnIter, GET_VALUE);
+                            } else if (!strcmp(dnnKey, "natifname")) {
+                                natifname = (char *)YamlIterGet(&dnnIter, GET_VALUE);
                             } else {
-                                UTLT_Warning("Unknown key \"%s\" of apn_list", apnKey);
+                                UTLT_Warning("Unknown key \"%s\" of dnn_list", dnnKey);
                             }
                         }
 
-                        if (apn && ipStr && mask) {
-                            UTLT_Assert(UpfApnAdd(apn, ipStr, mask, natifname) != NULL, 
-                                        return STATUS_ERROR, "");
+                        if (dnnName && ipStr && mask) {
+                            DNN *dnn = AllocDNN();
+                            UTLT_Assert(dnn, return STATUS_ERROR, "Alloc DNN failed")
+
+                            UTLT_Assert(strlen(dnnName) < sizeof(dnn->name), return STATUS_ERROR,
+                                "Length is too long for DNN name, Max is %u", sizeof(dnn->name) - 1);
+                            strcpy(dnn->name, dnnName);
+
+                            UTLT_Assert(strlen(ipStr) < sizeof(dnn->ipStr), return STATUS_ERROR,
+                                "Length is too long for IP address, Max is %u", sizeof(dnn->ipStr) - 1);
+                            strcpy(dnn->ipStr, ipStr);
+                            
+                            if (natifname) {
+                                UTLT_Assert(strlen(natifname) < sizeof(dnn->natifname), return STATUS_ERROR,
+                                    "Length is too long for NAT Ifname, Max is %u", sizeof(dnn->natifname) - 1);
+                                strcpy(dnn->natifname, natifname);
+                            }
+
+                            dnn->subnetPrefix = atoi(mask);
+                            EnvParamsAddDNN(Self()->envParams, dnn);
                         }
-                    } while (YamlIterType(&apnList) == YAML_SEQUENCE_NODE);
+                    } while (YamlIterType(&dnnList) == YAML_SEQUENCE_NODE);
                 } else
                     UTLT_Warning("Unknown key \"%s\" of configuration", upfKey);
             }
@@ -231,7 +259,7 @@ static void DeleteYamlDocument() {
 
 static Status AddGtpv1Endpoint(const char *host) {
     char ifname[MAX_IFNAME_STRLEN];
-    sprintf(ifname, "%s%d", Self()->gtpDevNamePrefix, Self()->gtpv1DevSN++);
+    sprintf(ifname, "%s", Self()->gtpDevNamePrefix);
 
     return AddGtpv1EndpointWithName(host, ifname);
 }
@@ -240,13 +268,23 @@ static Status AddGtpv1EndpointWithName(const char *host, const char *ifname) {
     UTLT_Assert(host, return STATUS_ERROR, "");
 
     int result;
-    char ip[INET6_ADDRSTRLEN];
+    char ipStr[INET6_ADDRSTRLEN];
 
-    result = GetAddrFromHost(ip, host, INET6_ADDRSTRLEN);
-    UTLT_Assert(result == STATUS_OK, return STATUS_ERROR, "");
+    UTLT_Assert(strlen(ifname) < sizeof(Self()->envParams->virtualDevice->deviceID),
+        return STATUS_ERROR, "ifname is too long");
+    strcpy(Self()->envParams->virtualDevice->deviceID, ifname);
 
-    Gtpv1TunDevNode *node = Gtpv1DevListAdd(&Self()->gtpv1DevList, ip, ifname);
-    UTLT_Assert(node, return STATUS_ERROR, "");
+    result = GetAddrFromHost(ipStr, host, INET6_ADDRSTRLEN);
+    UTLT_Assert(result == STATUS_OK, return STATUS_ERROR,
+        "Cannot solve this hostname");
+
+    // TODO: DO NOT handle DPDK now
+    VirtualPort *port = AllocVirtualPort();
+    UTLT_Assert(port, return STATUS_ERROR, "Alloc VirtualPort failed");
+
+    strcpy(port->ipStr, ipStr);
+
+    VirtualDeviceAddPort(Self()->envParams->virtualDevice, port);
 
     return STATUS_OK;
 }

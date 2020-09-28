@@ -63,11 +63,12 @@ static int _pfcpReceiveCB(Sock *sock, void *data) {
                 // if upf == NULL (allocate error)
                 // Count size of upfN4List
                 int numOfUpf = 0;
-                PfcpNode *n4Node = ListFirst(&Self()->upfN4List);
-                while (n4Node) {
+                PfcpNode *n4Node , *nextNode = NULL;
+                
+                ListForEachSafe(n4Node, nextNode, &Self()->upfN4List) {
                     ++numOfUpf;
-                    n4Node = (PfcpNode *)ListNext(n4Node);
                 }
+                
                 UTLT_Error("PFCP Node allocate error, "
                             "there may be too many SMF: %d", numOfUpf);
                 BufblkFree(bufBlk);
@@ -109,14 +110,27 @@ Status PfcpServerInit() {
     status = PfcpServerList(&Self()->pfcpIPList, _pfcpReceiveCB, Self()->epfd);
     UTLT_Assert(status == STATUS_OK, return STATUS_ERROR,
                 "Create PFCP Server for IPv4 error");
-    status = PfcpServerList(&Self()->pfcpIPv6List, _pfcpReceiveCB, Self()->epfd);
-    UTLT_Assert(status == STATUS_OK, return STATUS_ERROR,
-                "Create PFCP Server for IPv6 error");
+    // TODO: IPv6 not support yet
+    // status = PfcpServerList(&Self()->pfcpIPv6List, _pfcpReceiveCB, Self()->epfd);
+    // UTLT_Assert(status == STATUS_OK, return STATUS_ERROR,
+    //             "Create PFCP Server for IPv6 error");
 
-    Self()->pfcpSock = PfcpLocalSockFirst(&Self()->pfcpIPList);
-    Self()->pfcpSock6 = PfcpLocalSockFirst(&Self()->pfcpIPv6List);
-    Self()->pfcpAddr = PfcpLocalAddrFirst(&Self()->pfcpIPList);
-    Self()->pfcpAddr6 = PfcpLocalAddrFirst(&Self()->pfcpIPv6List);
+    if (&Self()->pfcpIPList != NULL) {
+
+        Self()->pfcpSock = PfcpLocalSockFirst(&Self()->pfcpIPList);
+    }
+    //if (&Self()->pfcpIPv6List != NULL) {
+
+    //    Self()->pfcpSock6 = PfcpLocalSockFirst(&Self()->pfcpIPv6List);
+    //}
+    if (&Self()->pfcpIPList != NULL) {
+
+        Self()->pfcpAddr = PfcpLocalAddrFirst(&Self()->pfcpIPList);
+    }
+    //if (&Self()->pfcpIPv6List != NULL) {
+
+    //    Self()->pfcpAddr6 = PfcpLocalAddrFirst(&Self()->pfcpIPv6List);
+    //}
 
     UTLT_Assert(Self()->pfcpAddr || Self()->pfcpAddr6, return STATUS_ERROR, "No PFCP Server");
 
@@ -125,7 +139,7 @@ Status PfcpServerInit() {
 
 Status PfcpServerTerminate() {
     SockListFree(&Self()->pfcpIPList);
-    SockListFree(&Self()->pfcpIPv6List);
+    // SockListFree(&Self()->pfcpIPv6List);
 
     return STATUS_OK;
 }

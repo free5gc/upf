@@ -29,14 +29,14 @@ Status PfcpNodeTerminate() {
     return STATUS_OK;
 }
 
-Status PfcpAddNode(ListNode *list, PfcpNode **node,
+Status PfcpAddNode(ListHead *list, PfcpNode **node,
                    const SockAddr *allList, _Bool noIpv4,
                    _Bool noIpv6, _Bool preferIpv4) {
     Status status;
     PfcpNode *newNode = NULL;
     SockAddr *preferredList = NULL;
 
-    UTLT_Assert(list, return STATUS_ERROR, "ListNode error");
+    UTLT_Assert(list, return STATUS_ERROR, "ListHead error");
     UTLT_Assert(allList, return STATUS_ERROR, "list of socket error");
 
     status = SockAddrCopy(&preferredList, &allList);
@@ -65,12 +65,13 @@ Status PfcpAddNode(ListNode *list, PfcpNode **node,
 
         newNode->saList = preferredList;
 
-        ListInit(&newNode->localList);
-        ListInit(&newNode->remoteList);
+        ListHeadInit(&newNode->node);
+        ListHeadInit(&newNode->localList);
+        ListHeadInit(&newNode->remoteList);
 
         newNode->timeHeartbeat = 0;
 
-        ListAppend(list, newNode);
+        ListInsert(newNode, list);
         newNode->state = PFCP_NODE_ST_NULL;
     }
 
@@ -79,7 +80,7 @@ Status PfcpAddNode(ListNode *list, PfcpNode **node,
     return STATUS_OK;
 }
 
-PfcpNode *PfcpAddNodeWithSeid(ListNode *list, PfcpFSeid *fSeid,
+PfcpNode *PfcpAddNodeWithSeid(ListHead *list, PfcpFSeid *fSeid,
         uint16_t port, _Bool noIpv4, _Bool noIpv6, _Bool preferIpv4) {
     Status status;
     PfcpNode *node = NULL;
@@ -113,10 +114,17 @@ err1:
     return NULL;
 }
 
-Status PfcpRemoveNode(ListNode *list, PfcpNode *node) {
+Status PfcpRemoveNode(ListHead *list, PfcpNode *node) {
     UTLT_Assert(node, return STATUS_ERROR, "pfcp node error");
 
-    ListRemove(list, node);
+    PfcpNode *it, *nextIt = NULL;
+    
+    ListForEachSafe(it, nextIt, list) {
+        if (it == node) {
+            ListRemove(it);
+            break;
+        }
+    }
 
     if (node->timeHeartbeat) {
         TimerDelete(node->timeHeartbeat);
@@ -130,23 +138,18 @@ Status PfcpRemoveNode(ListNode *list, PfcpNode *node) {
     return STATUS_OK;
 }
 
-Status PfcpRemoveAllNodes(ListNode *list) {
+Status PfcpRemoveAllNodes(ListHead *list) {
     PfcpNode *next = NULL, *current = NULL;
 
-    current = ListFirst(list);
-
-    while (current) {
-        next = ListNext(current);
+    ListForEachSafe(current, next, list) { 
         PfcpRemoveNode(list, current);
-        current = next;
     }
-
     return STATUS_OK;
 }
 
-PfcpNode *PfcpFindNode(ListNode *list, PfcpFSeid *fSeid) {
+PfcpNode *PfcpFindNode(ListHead *list, PfcpFSeid *fSeid) {
     Status status;
-    PfcpNode *current = NULL;
+    PfcpNode *current, *nextNode = NULL;
     Ip ip;
 
     UTLT_Assert(list, return NULL, "Input pfcpList error");
@@ -156,11 +159,14 @@ PfcpNode *PfcpFindNode(ListNode *list, PfcpFSeid *fSeid) {
     UTLT_Assert(status == STATUS_OK, return NULL, "F-SEID to IP error");
 
     current = ListFirst(list);
-    while(current) {
+    if (current == (PfcpNode *) list) {
+        return NULL;
+    }
+    
+    ListForEachSafe(current, nextNode, list) { 
         if(!memcmp(&ip, &(current->ip), ip.len)) {
             break;
         }
-        current = ListNext(current);
     }
 
     return current;
@@ -192,15 +198,21 @@ int SockCmp(SockAddr *a, SockAddr *b) {
     }
 }
 
-PfcpNode *PfcpFindNodeSockAddr(ListNode *list, SockAddr *sock) {
-    PfcpNode *current = NULL;
+PfcpNode *PfcpFindNodeSockAddr(ListHead *list, SockAddr *sock) {
+    PfcpNode *current, *nextNode = NULL;
 
     UTLT_Assert(list, return NULL, "Input pfcpList error");
     UTLT_Assert(sock, return NULL, "SocketAddr error");
 
     current = ListFirst(list);
+
+    if (current ==  (PfcpNode *) list) {
+        return NULL;
+    }
+
     _Bool hitSame = 0;
-    while(current) {
+
+    ListForEachSafe(current, nextNode, list) {
         SockAddr *addr;
         for (addr = current->saList; addr; addr = addr->next) {
             if(!SockCmp(addr, sock)) {
@@ -211,7 +223,6 @@ PfcpNode *PfcpFindNodeSockAddr(ListNode *list, SockAddr *sock) {
         if (hitSame) {
             break;
         }
-        current = ListNext(current);
     }
 
     return current;

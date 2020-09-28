@@ -5,6 +5,7 @@
 #include <unistd.h>
 #include <signal.h>
 #include <errno.h>
+#include <sys/socket.h>
 
 #include "utlt_lib.h"
 #include "utlt_debug.h"
@@ -12,13 +13,14 @@
 #include "utlt_thread.h"
 #include "utlt_timer.h"
 #include "utlt_network.h"
-#include "gtp_path.h"
-#include "gtp_buffer.h"
 #include "upf_context.h"
 #include "upf_config.h"
 #include "up/up_path.h"
 #include "n4/n4_pfcp_path.h"
 #include "pfcp_xact.h"
+
+#include "updk/env.h"
+#include "updk/init.h"
 
 static Status SignalRegister(void *data);
 
@@ -32,6 +34,9 @@ static Status EventQueueTerm(void *data);
 
 static Status PacketRecvThreadInit(void *data);
 static Status PacketRecvThreadTerm(void *data);
+
+static Status Gtpv1Init(void *data);
+static Status Gtpv1Term(void *data);
 
 static Status PfcpInit(void *data);
 static Status PfcpTerm(void *data);
@@ -67,14 +72,6 @@ UpfOps UpfOpsList[] = {
         .init = SockPoolInit,
         .initData = NULL,
         .term = SockPoolFinal,
-        .termData = NULL,
-    },
-    // TODO: This part will be abstract as GtpEnvInit
-    {
-        .name = "Library - GTPv1 Device Pool",
-        .init = Gtpv1DevPoolInit,
-        .initData = NULL,
-        .term = Gtpv1DevPoolFinal,
         .termData = NULL,
     },
     {
@@ -119,12 +116,11 @@ UpfOps UpfOpsList[] = {
         .term = PacketRecvThreadTerm,
         .termData = NULL,
     },
-    // TODO: This part will be abstract as GtpEnvInit
     {
-        .name = "UPF - GTP-U Server",
-        .init = GTPv1ServerInit,
+        .name = "UPF - Environment Init",
+        .init = Gtpv1Init,
         .initData = NULL,
-        .term = GTPv1ServerTerminate,
+        .term = Gtpv1Term,
         .termData = NULL,
     },
     {
@@ -135,6 +131,7 @@ UpfOps UpfOpsList[] = {
         .termData = NULL,
     },
     // TODO: This part will be abstract as GtpEnvInit
+    /*
     {
         .name = "UPF - Routing Setting",
         .init = UpRouteInit,
@@ -149,6 +146,7 @@ UpfOps UpfOpsList[] = {
         .term = BufferServerTerminate,
         .termData = NULL,
     },
+    */
 };
 
 Status UpfSetConfigPath(char *path) {
@@ -166,11 +164,12 @@ Status UpfInit() {
     for (int i = 0; i < sizeof(UpfOpsList) / sizeof(UpfOps); i++) {
         if (UpfOpsList[i].init) {
             status = UpfOpsList[i].init(UpfOpsList[i].initData);
-            UTLT_Assert(status == STATUS_OK, break,
+            UTLT_Assert(status == STATUS_OK, status |= STATUS_ERROR; break,
                 "%s error when UPF initializes", UpfOpsList[i].name);
+            
+            UTLT_Trace("%s is finished in UPF initialization", UpfOpsList[i].name);
         }
     }
-    
     return status;
 }
 
@@ -179,8 +178,10 @@ Status UpfTerm() {
     for (int i = (int)(sizeof(UpfOpsList) / sizeof(UpfOps)) - 1; i >= 0 ; i--) {
         if (UpfOpsList[i].term) {
             status = UpfOpsList[i].term(UpfOpsList[i].termData);
-            UTLT_Assert(status == STATUS_OK, break,
+            UTLT_Assert(status == STATUS_OK, status |= STATUS_ERROR,
                 "%s error when UPF terminates", UpfOpsList[i].name);
+
+            UTLT_Trace("%s is finished in UPF termination", UpfOpsList[i].name);
         }
     }
     
@@ -294,29 +295,64 @@ void PacketReceiverThread(ThreadID id, void *data) {
     }
 
     sem_post(((Thread *)id)->semaphore);
-    UTLT_Info("Packet receiver thread terminated");
+    UTLT_Trace("Packet receiver thread terminated");
 
     return;
 }
 
-static Status PfcpInit(void *data) {
-    UTLT_Assert(PfcpServerInit() == STATUS_OK,
-        return STATUS_ERROR, "");
+static Status Gtpv1Init(void *data) {
+    Self()->upSock.fd = Gtpv1EnvInit(Self()->envParams);
+    UTLT_Assert(Self()->upSock.fd != -1, return STATUS_OK, "");
 
-    // init pfcp xact context
-    UTLT_Assert(PfcpXactInit(&Self()->timerServiceList,
-                    UPF_EVENT_N4_T3_RESPONSE, UPF_EVENT_N4_T3_HOLDING) == STATUS_OK,
-        return STATUS_ERROR, "");
+    socklen_t addrlen = 0;
+    UTLT_Assert(getsockname(Self()->upSock.fd, &Self()->upSock.localAddr.sa, &addrlen) == 0,
+        return STATUS_ERROR, "Get address from fd failed");
+
+    if (addrlen == INET_ADDRSTRLEN) {
+        Self()->upSock.localAddr._family = AF_INET;
+        Self()->upSock.localAddr.s4.sin_port = ntohs(Self()->gtpv1Port);
+    }
+    else if (addrlen == INET6_ADDRSTRLEN) {
+        Self()->upSock.localAddr._family = AF_INET6;
+        Self()->upSock.localAddr.s6.sin6_port = ntohs(Self()->gtpv1Port);
+    }
+    else
+        UTLT_Warning("Do Not Support this protocol in L3");
 
     return STATUS_OK;
 }
 
+static Status Gtpv1Term(void *data) {
+    Status status = STATUS_OK;
+
+    UpfSessionRemoveAll();
+
+    UTLT_Assert(Gtpv1EnvTerm(Self()->envParams) == 0,
+        status |= STATUS_ERROR, "");
+
+    return status;
+}
+
+static Status PfcpInit(void *data) {
+    Status status = STATUS_OK;
+    UTLT_Assert(PfcpServerInit() == STATUS_OK,
+        status |= STATUS_ERROR, "");
+
+    // init pfcp xact context
+    UTLT_Assert(PfcpXactInit(&Self()->timerServiceList,
+                    UPF_EVENT_N4_T3_RESPONSE, UPF_EVENT_N4_T3_HOLDING) == STATUS_OK,
+        status |= STATUS_ERROR, "");
+
+    return status;
+}
+
 static Status PfcpTerm(void *data) {
+    Status status = STATUS_OK;
     UTLT_Assert(PfcpXactTerminate() == STATUS_OK,
-        return STATUS_ERROR, "");
+        status |= STATUS_ERROR, "");
 
     UTLT_Assert(PfcpServerTerminate() == STATUS_OK,
-        return STATUS_ERROR, "");
+        status |= STATUS_ERROR, "");
 
-    return STATUS_OK;
+    return status;
 }
