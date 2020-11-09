@@ -213,8 +213,7 @@ void HashSet(Hash *ht, const void *key, int klen, const void *val) {
             /* delete entry */
             HashEntry *old = *hep;
             *hep = (*hep)->next;
-            old->next = ht->entry;
-            ht->entry = old;
+            Free(old);
             --ht->count;
         }
         else {

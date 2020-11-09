@@ -442,7 +442,6 @@ Status UpfBufPacketRemove(UpfBufPacket *bufPacket) {
     Status status;
 
     bufPacket->sessionPtr = NULL;
-    bufPacket->pdrId = 0;
     if (bufPacket->packetBuffer) {
         status = BufblkFree(bufPacket->packetBuffer);
         UTLT_Assert(status == STATUS_OK, return STATUS_ERROR,
@@ -588,6 +587,20 @@ Status UpfSessionRemove(UpfSession *session) {
     // if (session->ueIpv6) {
     //     UpfUeIPFree(session->ueIpv6);
     // }
+
+    uint16_t pdrId;
+    UpfPDRNode *ruleNode;
+    UpfPDRNode *nextNode;
+    ruleNode = ListFirst(&(session)->pdrList);
+    while (ruleNode != (UpfPDRNode *)&(session)->pdrList) {
+        nextNode = (UpfPDRNode *)ListNext(ruleNode);
+        pdrId = ruleNode->pdr.pdrId;
+        UpfBufPacket *tmpBufPacket = UpfBufPacketFindByPdrId(pdrId);
+        if (tmpBufPacket != NULL) {
+            UpfBufPacketRemove(tmpBufPacket);
+        }
+        ruleNode = nextNode;
+    }
 
     PDR_Thread_Safe(
         RuleListDeletionAndFreeWithGTPv1Tunnel(PDR, pdr, session);
