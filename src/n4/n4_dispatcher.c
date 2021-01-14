@@ -39,8 +39,6 @@ void UpfDispatcher(const Event *event) {
         status = PfcpXactCommit(xact);
         UTLT_Assert(status == STATUS_OK, return, "xact commit error");
 
-        BufblkFree(bufBlk);
-
         break;
     }
     case UPF_EVENT_N4_MESSAGE: {
