@@ -2,6 +2,7 @@
 #define __TIMER_H__
 
 #include <stdint.h>
+#include <pthread.h>
 
 #include "utlt_debug.h"
 #include "utlt_list.h"
@@ -27,6 +28,7 @@ extern "C" {
 typedef struct _TimerList {
     ListHead active;
     ListHead idle;
+    pthread_mutex_t lock;
 } TimerList;
 
 typedef uintptr_t TimerBlkID;
