@@ -5,74 +5,99 @@
 extern "C" {
 #endif /* __cplusplus */
 
-typedef struct _ListNode {
-    struct _ListNode *prev;
-    struct _ListNode *next;
-} ListNode;
+typedef struct _ListHead {
+	struct _ListHead *next;
+    struct _ListHead *prev;
+}ListHead;
 
-// Initialize head of list
-#define ListInit(__namePtr) do {\
-    (__namePtr)->prev = NULL; \
-    (__namePtr)->next = NULL; \
+#define ListHeadInit(__nameHeadPtr) do { \
+    (__nameHeadPtr)->next = __nameHeadPtr; \
+    (__nameHeadPtr)->prev = __nameHeadPtr; \
 } while (0)
 
 #define ListFirst(__namePtr) ((void *)((__namePtr)->next))
 
-#define ListLast(__namePtr) ((void *)((__namePtr)->prev))
+#define ListPrev(__nodePtr) ((void *)(((ListHead *)(__nodePtr))->prev))
 
-#define ListPrev(__nodePtr) ((void *)(((ListNode *)(__nodePtr))->prev))
-
-#define ListNext(__nodePtr) ((void *)(((ListNode *)(__nodePtr))->next))
+#define ListNext(__nodePtr) ((void *)(((ListHead *)(__nodePtr))->next))
 
 #define ListIsEmpty(__namePtr) ((__namePtr)->next == NULL)
 
-#define ListAppend(__namePtr, __newPtr) do { \
-    ListNode *iter = (__namePtr); \
-    while (iter->next) \
-        iter = ListNext(iter); \
-    ((ListNode *)(__newPtr))->prev = iter; \
-    ((ListNode *)(__newPtr))->next = NULL; \
-    iter->next = (ListNode *)(__newPtr); \
-} while (0)
+#define __ListInsert(__newPtr,__nameHeadPtr,__nameHeadNextPtr) do { \
+    ((ListHead *) __nameHeadNextPtr)->prev = (ListHead *) __newPtr; \
+    ((ListHead *) __newPtr)->next = (ListHead *) __nameHeadNextPtr; \
+    ((ListHead *) __newPtr)->prev = (ListHead *) __nameHeadPtr; \
+    ((ListHead *) __nameHeadPtr)->next = (ListHead *) __newPtr; \
+} while(0)
 
-#define ListInsertToPrev(__namePtr, __nodePtr, __newPtr) do { \
-    ((ListNode *)(__newPtr))->prev = ((ListNode *)(__nodePtr))->prev; \
-    ((ListNode *)(__newPtr))->next = (ListNode *)(__nodePtr); \
-    if (((ListNode *)(__nodePtr))->prev) \
-        ((ListNode *)(__nodePtr))->prev->next = (ListNode *)(__newPtr); \
-    else \
-        (__namePtr)->next = (ListNode *)(__newPtr); \
-    ((ListNode *)(__nodePtr))->prev = ((ListNode *)(__newPtr)); \
-} while (0)
+#define ListInsert(__newPtr, __namePtr) do { \
+    __ListInsert(__newPtr, __namePtr, ((ListHead *) __namePtr)->next); \
+} while(0)
 
-#define ListRemove(__namePtr, __nodePtr) do { \
-    ListNode *iter = (__namePtr); \
+#define ListInsertTail(__newPtr, __namePtr) do { \
+    __ListInsert(__newPtr, ((ListHead *) __namePtr)->next, __namePtr); \
+} while(0)
+
+
+/*
+ * Delete a list entry by making the prev/next entries
+ * point to each other.
+ *
+ * This is only for internal list manipulation where we know
+ * the prev/next entries already!
+ */
+#define __ListRemove(__namePrevPtr, __nameNextPtr) do { \
+    ((ListHead *) __nameNextPtr)->prev = (ListHead *) __namePrevPtr; \
+    ((ListHead *) __namePrevPtr)->next = (ListHead *) __nameNextPtr; \
+} while(0)
+
+#define __ListRemoveEntry(entry) do { \
+   __ListRemove( ((ListHead *) entry)->prev, ((ListHead *) entry)->next); \
+} while(0)
+
+typedef int (*ListHeadCompare)(ListHead *pnode1, ListHead *pnode2);
+/**
+ * list_del - deletes entry from list.
+ * @entry: the element to delete from the list.
+ * Note: list_empty() on entry does not return true after this, the entry is
+ * in an undefined state.
+ */
+#define ListRemove(entry) do { \
+	__ListRemoveEntry((ListHead *) entry); \
+	((ListHead *) entry)->next = NULL; \
+	((ListHead *) entry)->prev = NULL; \
+} while(0)
+
+
+typedef int (*ListHeadCompare)(ListHead *pnode1, ListHead *pnode2);
+
+#define ListInsertSorted(__newPtr, __namePtr, __cmpCallback) do { \
+    ListHeadCompare callbackPtr = (ListHeadCompare)__cmpCallback; \
+    ListHead *iter = ((ListHead *) __namePtr); \
     while (iter->next) { \
-        if (iter->next == (ListNode *)(__nodePtr)) { \
-            iter->next = ((ListNode *)(__nodePtr))->next; \
-            if (iter->next) \
-                iter->next->prev = (ListNode *)iter; \
+        if (iter->next == __namePtr ) { \
             break; \
         } \
-        iter = iter->next; \
-    } \
-} while (0)
-
-typedef int (*ListNodeCompare)(ListNode *pnode1, ListNode *pnode2);
-
-#define ListInsertSorted(__namePtr, __newPtr, __cmpCallback) do { \
-    ListNodeCompare callbackPtr = (ListNodeCompare)__cmpCallback; \
-    ListNode *iter = ListFirst(__namePtr); \
-    while (iter) { \
-        if ((*callbackPtr)((ListNode *)(__newPtr), iter) < 0) { \
-            ListInsertToPrev(__namePtr, iter, __newPtr); \
+        if ((*callbackPtr)((ListHead *)(__newPtr), ListNext(iter)) < 0) { \
             break; \
         } \
         iter = ListNext(iter); \
     } \
-    if (iter == NULL) \
-        ListAppend(__namePtr, __newPtr); \
+    ListInsert( __newPtr, iter); \
 } while (0)
+
+/**
+ * list_for_each_safe - iterate over a list safe against removal of list entry
+ * @__nameNextPtr:   	the &struct list_head to use as a loop cursor.
+ * @__nameNextPtrNext:	another &struct list_head to use as temporary storage
+ * @__namePtr:        	the head for your list.
+ */
+
+#define ListForEachSafe(__nameNextPtr, __nameNextPtrNext, __namePtr) \
+	for ( __nameNextPtr = ListFirst(__namePtr), __nameNextPtrNext = ListNext(__nameNextPtr); \
+          (void *) __nameNextPtr != (void *)__namePtr; \
+		  (__nameNextPtr) = __nameNextPtrNext, __nameNextPtrNext = ListNext(__nameNextPtr) \
+        )
 
 #ifdef __cplusplus
 }

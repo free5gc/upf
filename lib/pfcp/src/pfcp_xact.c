@@ -53,7 +53,7 @@ Status PfcpXactTerminate() {
                 "PFCP Xact already finalized");
 
     if (PoolUsedCheck(&pfcpXactPool)) {
-        UTLT_Debug("%d not freed in pfcpXactPool[%d] of PFCP Transaction",
+        UTLT_Warning("%d not freed in pfcpXactPool[%d] of PFCP Transaction",
                    PoolUsedCheck(&pfcpXactPool), PoolSize(&pfcpXactPool));
     }
     UTLT_Trace("%d freed in pfcpXactPool[%d] of PFCP Transaction",
@@ -96,8 +96,13 @@ PfcpXact *PfcpXactLocalCreate(PfcpNode *gnode, PfcpHeader *header, Bufblk *bufBl
     }
     */
 
-    ListAppend(xact->origin == PFCP_LOCAL_ORIGINATOR ?
-               &xact->gnode->localList : &xact->gnode->remoteList, xact);
+    if (xact->origin == PFCP_LOCAL_ORIGINATOR) {
+        ListHeadInit(&xact->gnode->localList);
+        ListInsert(xact, &xact->gnode->localList);
+    } else {
+        ListHeadInit(&xact->gnode->remoteList);
+        ListInsert(xact, &xact->gnode->remoteList);
+    }
 
     status = PfcpXactUpdateTx(xact, header, bufBlk);
     UTLT_Assert(status == STATUS_OK, goto err, "Update Tx failed");
@@ -145,8 +150,13 @@ PfcpXact *PfcpXactRemoteCreate(PfcpNode *gnode, uint32_t sqn) {
         xact->holdingReCount = PFCP_T3_DUPLICATED_RETRY_COUNT;
     }
 
-    ListAppend(xact->origin == PFCP_LOCAL_ORIGINATOR ?
-            &xact->gnode->localList : &xact->gnode->remoteList, xact);
+    if (xact->origin == PFCP_LOCAL_ORIGINATOR) {
+        ListHeadInit(&xact->gnode->localList);
+        ListInsert(xact, &xact->gnode->localList);
+    } else {
+        ListHeadInit(&xact->gnode->remoteList);
+        ListInsert(xact, &xact->gnode->remoteList);
+    }
 
     UTLT_Trace("[%d] %s Create  peer [%s]:%d\n", xact->transactionId,
                xact->origin == PFCP_LOCAL_ORIGINATOR ? "local " : "remote",
@@ -180,11 +190,10 @@ Status PfcpXactDelete(PfcpXact *xact) {
     UTLT_Trace("[%d] %s Delete  peer [%s]:%d\n", xact->transactionId,
             xact->origin == PFCP_LOCAL_ORIGINATOR ? "local" : "remote",
             GetIP(&xact->gnode->sock->remoteAddr), GetPort(&xact->gnode->sock->remoteAddr));
-
     if (xact->origin == PFCP_LOCAL_ORIGINATOR) {
-        ListRemove(&(xact->gnode->localList), xact);
+        ListRemove(xact);
     } else if (xact->origin == PFCP_REMOTE_ORIGINATOR) {
-        ListRemove(&(xact->gnode->remoteList), xact);
+        ListRemove(xact);
     }
 
     xact->origin = 0;
@@ -215,25 +224,19 @@ Status PfcpXactDelete(PfcpXact *xact) {
         PfcpXactDeassociate(xact, xact->associatedXact);
     }
 
-    ListRemove(xact->origin == PFCP_LOCAL_ORIGINATOR ?
-               &xact->gnode->localList : &xact->gnode->remoteList, xact);
     IndexFree(&pfcpXactPool, xact);
-
     return STATUS_OK;
 }
 
 void PfcpXactDeleteAll(PfcpNode *gnode) {
-    PfcpXact *xact = NULL;
-
-    xact = ListFirst(&gnode->localList);
-    while(xact) {
+    PfcpXact *xact, *nextNode = NULL;
+    
+    ListForEachSafe(xact, nextNode, &gnode->localList) {
         PfcpXactDelete(xact);
-        xact = ListNext(xact);
     }
-    xact = ListFirst(&gnode->remoteList);
-    while(xact) {
+
+    ListForEachSafe(xact, nextNode, &gnode->remoteList) {
         PfcpXactDelete(xact);
-        xact = ListNext(xact);
     }
 
     return;
@@ -721,31 +724,42 @@ PfcpXact *PfcpXactFind(uint32_t index) {
 
 PfcpXact *PfcpXactFindByTransactionId(PfcpNode *gnode, uint8_t type, uint32_t transactionId) {
     PfcpXact *xact = NULL;
-
+    PfcpXact *nextNode = NULL;
+    ListHead *list = NULL; 
     UTLT_Assert(gnode, return NULL, "node error");
 
     switch (PfcpXactGetStage(type, transactionId)) {
         case PFCP_XACT_INITIAL_STAGE:
+            list = &gnode->remoteList;
             xact = ListFirst(&gnode->remoteList);
             break;
         case PFCP_XACT_INTERMEDIATE_STAGE:
+            list = &gnode->localList;
             xact = ListFirst(&gnode->localList);
             break;
         case PFCP_XACT_FINAL_STAGE:
-            if (transactionId & PFCP_MAX_XACT_ID)
+            if (transactionId & PFCP_MAX_XACT_ID) {
+                list = &gnode->remoteList;
                 xact = ListFirst(&gnode->remoteList);
-            else
+            }  else {
+                list = &gnode->localList;
                 xact = ListFirst(&gnode->localList);
+            }
+
+                
             break;
 
         default:
             UTLT_Assert(0, return NULL, "Unknown stage");
     }
-
-    while (xact) {
+    
+    ListForEachSafe(xact, nextNode, list) {
         if (xact->transactionId == transactionId)
             break;
-        xact = ListNext(xact);
+    }
+
+    if (xact == (PfcpXact *) list) {
+        return NULL;
     }
 
     if (xact) {

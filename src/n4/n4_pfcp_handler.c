@@ -11,141 +11,209 @@
 #include "pfcp_message.h"
 #include "pfcp_xact.h"
 #include "pfcp_convert.h"
-#include "gtp_path.h"
 #include "n4_pfcp_build.h"
 #include "up/up_path.h"
-#include "libgtp5gnl/gtp5g.h"
-#include "libgtp5gnl/gtp5gnl.h"
-#include "gtp_tunnel.h"
 
+#include "updk/rule.h"
+#include "updk/rule_pdr.h"
+#include "updk/rule_far.h"
 
-#define _PDR_ADD 0
-#define _PDR_MOD 1
-#define _PDR_DEL 2
-#define _FAR_ADD 0
-#define _FAR_MOD 1
-#define _FAR_DEL 2
+/*
+ * Note: When apply a IE from PDR or FAR, you should check all
+ * "_Convert*TlvToRule" if they need to be modified.
+ * 
+ * PDR: "_ConvertCreatePDRTlvToRule", "_ConvertUpdatePDRTlvToRule"
+ * FAR: "_ConvertCreateFARTlvToRule", "_ConvertUpdateFARTlvToRule"
+ */
 
-#define _addr4ToStr(addrPtr, ipStr)                         \
-    char ipStr[INET_ADDRSTRLEN];                            \
-    inet_ntop(AF_INET, addrPtr, ipStr, INET_ADDRSTRLEN);
+Status _ConvertCreatePDRTlvToRule(UpfPDR *upfPdr, CreatePDR *createPdr) {
+    UTLT_Assert(upfPdr && createPdr, return STATUS_ERROR,
+        "UpfPDR or CreatePDR pointer should not be NULL");
 
-Status _pushPdrToKernel(struct gtp5g_pdr *pdr, int action) {
-    UTLT_Assert(pdr, return STATUS_ERROR, "push PDR not found");
-    Status status;
+    char ipStr[INET6_ADDRSTRLEN];
+    struct in_addr *ipv4Ptr;
+    struct in6_addr *ipv6Ptr;
 
-    Gtpv1TunDevNode *gtpv1Dev4 =
-        (Gtpv1TunDevNode*)ListFirst(&Self()->gtpv1DevList);
-    UTLT_Assert(gtpv1Dev4, return STATUS_ERROR, "No gtp device");
-    char *ifname = gtpv1Dev4->ifname;
-
-    uint16_t pdrId = *(uint16_t*)gtp5g_pdr_get_id(pdr);
-
-    if (gtp5g_pdr_get_precedence(pdr)) {
-        UTLT_Debug("precendence: %u", ntohl(*gtp5g_pdr_get_precedence(pdr)));
-    }
-    if (gtp5g_pdr_get_far_id(pdr)) {
-        UTLT_Debug("farId: %u", ntohl(*gtp5g_pdr_get_far_id(pdr)));
-    }
-    if (gtp5g_pdr_get_outer_header_removal(pdr)) {
-        UTLT_Debug("outer header removal: %u",
-                   *gtp5g_pdr_get_outer_header_removal(pdr));
-    }
-    if (gtp5g_pdr_get_ue_addr_ipv4(pdr)) {
-        _addr4ToStr(gtp5g_pdr_get_ue_addr_ipv4(pdr), ipStr);
-        UTLT_Debug("ue ip: %s", ipStr);
-    }
-    if (gtp5g_pdr_get_local_f_teid_teid(pdr)) {
-        UTLT_Debug("teid: %u", ntohl(*gtp5g_pdr_get_local_f_teid_teid(pdr)));
-    }
-    if (gtp5g_pdr_get_local_f_teid_gtpu_addr_ipv4(pdr)) {
-        _addr4ToStr(gtp5g_pdr_get_local_f_teid_gtpu_addr_ipv4(pdr), ipStr);
-        UTLT_Debug("gtpu ip: %s", ipStr);
+    if (createPdr->pDRID.presence) {
+        upfPdr->flags.pdrId = 1;
+        upfPdr->pdrId = ntohs(*((uint16_t *)createPdr->pDRID.value));
+        UTLT_Debug("PDR ID: %u", upfPdr->pdrId);
     }
 
-    switch (action) {
-    case _PDR_ADD:
-        UTLT_Debug("PDR add to kernel, dev: %s, pdr id: %u",
-                   ifname, ntohs(*gtp5g_pdr_get_id(pdr)));
-        status = GtpTunnelAddPdr(ifname, pdr);
-        UTLT_Assert(status == STATUS_OK, return STATUS_ERROR,
-                    "Add PDR failed");
-        break;
-    case _PDR_MOD:
-        UTLT_Debug("PDR modify to kernel, dev: %s, pdr id: %u",
-                   ifname, ntohs(*gtp5g_pdr_get_id(pdr)));
-        status = GtpTunnelModPdr(ifname, pdr);
-        UTLT_Assert(status == STATUS_OK, return STATUS_ERROR,
-                    "Modify PDR failed");
-        break;
-    case _PDR_DEL:
-        UTLT_Debug("PDR delete to kernel, dev: %s, pdr id: %u",
-                   ifname, ntohs(*gtp5g_pdr_get_id(pdr)));
-        status = GtpTunnelDelPdr(ifname, pdrId);
-        UTLT_Assert(status == STATUS_OK, return STATUS_ERROR,
-                    "Delete PDR failed");
-        break;
-    default:
-        UTLT_Assert(0, return STATUS_ERROR,
-                    "PDR Action %d not defined", action);
+    if (createPdr->precedence.presence) {
+        upfPdr->flags.precedence = 1;
+        upfPdr->precedence = ntohl(*((uint32_t *)createPdr->precedence.value));
+        UTLT_Debug("PDR ID: %u", upfPdr->precedence);
     }
 
-    return STATUS_OK;
-}
+    if (createPdr->pDI.presence) {
+        upfPdr->flags.pdi = 1;
+        PDI *pdi = &createPdr->pDI;
+        UPDK_PDI *updkPdi = &upfPdr->pdi;
 
-Status _pushFarToKernel(struct gtp5g_far *far, int action) {
-    UTLT_Assert(far, return STATUS_ERROR, "push FAR not found");
-    Status status;
-
-    Gtpv1TunDevNode *gtpv1Dev4 =
-        (Gtpv1TunDevNode*)ListFirst(&Self()->gtpv1DevList);
-    UTLT_Assert(gtpv1Dev4, return STATUS_ERROR, "No GTP Device");
-    char *ifname = gtpv1Dev4->ifname;
-
-    uint32_t farId = *(uint32_t*)gtp5g_far_get_id(far);
-
-    if (gtp5g_far_get_apply_action(far)) {
-        UTLT_Debug("apply action: %u", *gtp5g_far_get_apply_action(far));
-    }
-    if (gtp5g_far_get_outer_header_creation_description(far)) {
-        UTLT_Debug("description: %u",
-                   *gtp5g_far_get_outer_header_creation_description(far));
-        if (gtp5g_far_get_outer_header_creation_peer_addr_ipv4(far)) {
-            _addr4ToStr(gtp5g_far_get_outer_header_creation_peer_addr_ipv4(far),
-                        ipStr);
-            UTLT_Debug("peer ipv4: %s", ipStr);
+        if (pdi->sourceInterface.presence) {
+            updkPdi->flags.sourceInterface = 1;
+            updkPdi->sourceInterface = *((uint8_t *)(pdi->sourceInterface.value));
+            UTLT_Debug("PDI Source Interface: %u", updkPdi->sourceInterface);
         }
-        if (gtp5g_far_get_outer_header_creation_port(far)) {
-            UTLT_Debug("port: %u",
-                       ntohs(*gtp5g_far_get_outer_header_creation_port(far)));
+
+        if (pdi->localFTEID.presence) {
+            updkPdi->flags.fTeid = 1;
+            UPDK_FTEID *updkFTeid = &updkPdi->fTeid;
+            PfcpFTeid *fTeid = (PfcpFTeid *)createPdr->pDI.localFTEID.value;
+            
+            // Copy flags in F-TEID
+            memcpy(updkFTeid, fTeid, sizeof(uint8_t));
+
+            updkFTeid->teid = ntohl(fTeid->teid);
+            UTLT_Debug("F-TEID TEID: %u", updkFTeid->teid);
+
+            if (fTeid->v4 && fTeid->v6) {
+                ipv4Ptr = &fTeid->dualStack.addr4;
+                ipv6Ptr = &fTeid->dualStack.addr6;
+            } else {
+                ipv4Ptr = &fTeid->addr4;
+                ipv6Ptr = &fTeid->addr6;
+            }
+
+            if (fTeid->v4) {
+                updkFTeid->ipv4 = *ipv4Ptr;
+                inet_ntop(AF_INET, &updkFTeid->ipv4, ipStr, INET_ADDRSTRLEN);
+                UTLT_Debug("F-TEID IPv4: %s", ipStr);
+            }
+
+            if (fTeid->v6) {
+                updkFTeid->ipv6 = *ipv6Ptr;
+                inet_ntop(AF_INET6, &updkFTeid->ipv6, ipStr, INET6_ADDRSTRLEN);
+                UTLT_Debug("F-TEID IPv6: %s", ipStr);
+            }
+
+            if (fTeid->chid) {
+                updkFTeid->chooseId = fTeid->chooseId;
+                UTLT_Debug("F-TEID Choose ID: %u", updkFTeid->chooseId);
+            }
+        }
+
+        if (pdi->uEIPAddress.presence) {
+            updkPdi->flags.ueIpAddress = 1;
+            UPDK_UEIPAddress *updkUeIpAddresss = &updkPdi->ueIpAddress;
+            PfcpUeIpAddr *ueIp = (PfcpUeIpAddr*)createPdr->pDI.uEIPAddress.value;
+
+            // Copy flags in UE IP Address
+            memcpy(updkUeIpAddresss, ueIp, sizeof(uint8_t));
+
+            if (ueIp->v4 && ueIp->v6) {
+                ipv4Ptr = &ueIp->dualStack.addr4;
+                ipv6Ptr = &ueIp->dualStack.addr6;
+            } else {
+                ipv4Ptr = &ueIp->addr4;
+                ipv6Ptr = &ueIp->addr6;
+            }
+
+            if (ueIp->v4) {
+                updkUeIpAddresss->ipv4 = *ipv4Ptr;
+                inet_ntop(AF_INET, &updkUeIpAddresss->ipv4, ipStr, INET_ADDRSTRLEN);
+                UTLT_Debug("UE IP Address IPv4: %s", ipStr);
+            }
+
+            if (ueIp->v6) {
+                updkUeIpAddresss->ipv6 = *ipv6Ptr;
+                inet_ntop(AF_INET6, &updkUeIpAddresss->ipv6, ipStr, INET6_ADDRSTRLEN);
+                UTLT_Debug("UE IP Address IPv6: %s", ipStr);
+            }
+
+            if (ueIp->ipv6d) {
+                updkUeIpAddresss->ipv6PrefixDelegationBit = ueIp->ipv6PrefixDelegationBit;
+                UTLT_Debug("UE IP Address IPv6 Prefix Delegation Bit: %u", ipStr);
+            }
+        }
+
+        if (pdi->sDFFilter.presence) {
+            updkPdi->flags.sdfFilter = 1;
+            UPDK_SDFFilter *updkSdfFilter = &updkPdi->sdfFilter;
+            PfcpSDFFilterDescription *des = (PfcpSDFFilterDescription*) pdi->sDFFilter.value;
+
+            // Copy flags in UE IP Address
+            memcpy(updkSdfFilter, des, sizeof(uint8_t));
+
+            for (size_t idx = 2; idx < createPdr->pDI.sDFFilter.len; /* Do nothing here */) {
+                if (des->fd) {
+                    // TODO: Need to Check if it is correct
+                    updkSdfFilter->lenOfFlowDescription = ntohs(*(uint16_t *) ((uint8_t *) pdi->sDFFilter.value + idx));
+
+                    // TODO: dynamic alloc?
+                    UTLT_Assert(sizeof(updkSdfFilter->flowDescription) > updkSdfFilter->lenOfFlowDescription,
+                        continue, "Need more space to store Flow Description");
+                    
+                    strncpy(updkSdfFilter->flowDescription, pdi->sDFFilter.value+idx+2,
+                       updkSdfFilter->lenOfFlowDescription);
+                    
+                    idx += 2 + updkSdfFilter->lenOfFlowDescription;
+
+                    UTLT_Debug("SDF Filter Flow Description: %s", updkSdfFilter->flowDescription);
+                } else if (des->ttc) {
+                    updkSdfFilter->tosTrafficClass = ntohs(*(uint16_t *)((uint8_t *) pdi->sDFFilter.value+idx));
+                    idx += 2;
+
+                    UTLT_Debug("SDF Filter ToS Traffic Class: %u", updkSdfFilter->tosTrafficClass);
+                } else if (des->spi) {
+                    updkSdfFilter->securityParameterIndex = ntohl(*(uint32_t *)((uint8_t *) pdi->sDFFilter.value+idx));
+                    idx += 4;
+
+                    UTLT_Debug("SDF Filter Security Parameter Index: %u", updkSdfFilter->securityParameterIndex);
+                } else if (des->fl) {
+                    memcpy(updkSdfFilter->flowLabel, (uint8_t *) pdi->sDFFilter.value+idx, sizeof(char) * 3);
+                    idx += 3;
+
+                    UTLT_Debug("SDF Filter Flow Label: %c%c%c",
+                        updkSdfFilter->flowLabel[0], updkSdfFilter->flowLabel[2], updkSdfFilter->flowLabel[3]);
+                } else if (des->bid) {
+                    updkSdfFilter->sdfFilterId = ntohl(*(uint32_t*)((uint8_t*)createPdr->pDI.sDFFilter.value+idx));
+                    UTLT_Debug("SDF Filter SDF Filter Id: %u", updkSdfFilter->sdfFilterId);
+                    idx += 4;
+                } else {
+                    UTLT_Warning("Other tag not implements");
+                    idx++;
+                }
+            }
         }
     }
 
-    switch (action) {
-    case _FAR_ADD:
-        UTLT_Debug("FAR add to kernel, dev: %s, far id: %u",
-                   ifname, ntohl(*gtp5g_far_get_id(far)));
-        status = GtpTunnelAddFar(ifname, far);
-        UTLT_Assert(status == STATUS_OK, return STATUS_ERROR,
-                    "Add FAR failed");
-        break;
-    case _FAR_MOD:
-        UTLT_Debug("FAR modify to kernel, dev: %s, far id: %u",
-                   ifname, ntohl(*gtp5g_far_get_id(far)));
-        status = GtpTunnelModFar(ifname, far);
-        UTLT_Assert(status == STATUS_OK, return STATUS_ERROR,
-                    "Modify FAR failed");
-        break;
-    case _FAR_DEL:
-        UTLT_Debug("FAR delete to kernel, dev: %s, far id: %u",
-                   ifname, ntohl(*gtp5g_far_get_id(far)));
-        status = GtpTunnelDelFar(ifname, farId);
-        UTLT_Assert(status == STATUS_OK, return STATUS_ERROR,
-                    "Delete FAR failed");
-        break;
-    default:
-        UTLT_Assert(0, return STATUS_ERROR,
-                    "FAR Action %d not defined", action);
+    if (createPdr->outerHeaderRemoval.presence) {
+        upfPdr->flags.outerHeaderRemoval = 1;
+        upfPdr->outerHeaderRemoval = *((uint8_t *)(createPdr->outerHeaderRemoval.value));
+        UTLT_Debug("PDR Outer Header Removal: %u", upfPdr->outerHeaderRemoval);
+    }
+
+    if (createPdr->fARID.presence) {
+        upfPdr->flags.farId = 1;
+        upfPdr->farId = ntohl(*((uint32_t *)createPdr->fARID.value));
+        UTLT_Debug("PDR FAR ID: %u", upfPdr->farId);
+    }
+
+    if (createPdr->uRRID.presence) {
+        // TODO: Need to handle multiple URR
+        /*
+        upfPdr->flags.urrId = 1;
+        upfPdr->urrId = ntohl(*((uint32_t *)createPdr->uRRID.value));
+        UTLT_Debug("PDR URR ID: %u", upfPdr->farId);
+        */
+        UTLT_Warning("UPF do NOT support URR yet");
+    }
+
+    if (createPdr->qERID.presence) {
+        // TODO: Need to handle multiple QER
+        /*
+        upfPdr->flags.qerId = 1;
+        upfPdr->qerId = ntohl(*((uint32_t *)createPdr->qERID.value));
+        UTLT_Debug("PDR QER ID: %u", upfPdr->qerId);
+        */
+        UTLT_Warning("UPF do NOT support QER yet");
+    }
+
+    if (createPdr->activatePredefinedRules.presence) {
+        // TODO: Need to support
+        UTLT_Warning("UPF do NOT support Activate Predefined Rules yet");
     }
 
     return STATUS_OK;
@@ -153,7 +221,6 @@ Status _pushFarToKernel(struct gtp5g_far *far, int action) {
 
 Status UpfN4HandleCreatePdr(UpfSession *session, CreatePDR *createPdr) {
     UTLT_Debug("Handle Create PDR");
-    UpfPdr *tmpPdr = NULL;
 
     UTLT_Assert(createPdr->pDRID.presence, return STATUS_ERROR,
                 "pdr id not presence");
@@ -164,458 +231,595 @@ Status UpfN4HandleCreatePdr(UpfSession *session, CreatePDR *createPdr) {
     UTLT_Assert(createPdr->pDI.sourceInterface.presence,
                 return STATUS_ERROR, "PDI SourceInterface not presence");
 
-    tmpPdr = gtp5g_pdr_alloc();
-    UTLT_Assert(tmpPdr, return STATUS_ERROR, "pdr allocate error");
+    UpfPDR upfPdr;
+    memset(&upfPdr, 0, sizeof(UpfPDR));
 
-    // PdrId
-    uint16_t pdrId = *((uint16_t *)createPdr->pDRID.value);
-    UTLT_Debug("PDR ID: %u", ntohs(pdrId));
-    gtp5g_pdr_set_id(tmpPdr, pdrId);
-    gtp5g_pdr_set_unix_sock_path(tmpPdr, Self()->buffSockPath);
+    uint16_t pdrID = ntohs(*((uint16_t*) createPdr->pDRID.value));
+    UTLT_Assert(UpfPDRFindByID(pdrID, &upfPdr), return STATUS_ERROR, "PDR ID[%u] does exist in UPF Context", pdrID);
 
-    // precedence
-    uint32_t precedence = *((uint32_t *)createPdr->precedence.value);
-    gtp5g_pdr_set_precedence(tmpPdr, precedence);
+    // TODO: Need to store the rule in UPF
 
-    // source interface
-    //uint8_t sourceInterface =
-    //    *((uint8_t *)(createPdr->pDI.sourceInterface.value));
+    UTLT_Assert(_ConvertCreatePDRTlvToRule(&upfPdr, createPdr) == STATUS_OK,
+        return STATUS_ERROR, "Convert PDR TLV To Rule is failed");
 
-    // F-TEID
-    if (createPdr->pDI.localFTEID.presence) {
-        PfcpFTeid *fTeid = (PfcpFTeid*)createPdr->pDI.localFTEID.value;
-        uint32_t teid = fTeid->teid;
+    // Using UPDK API
+    UTLT_Assert(Gtpv1TunnelCreatePDR(&upfPdr) == 0, return STATUS_ERROR,
+        "Gtpv1TunnelCreatePDR failed");
 
-        if (fTeid->v4 && fTeid->v6) {
-            // TODO: Dual Stack
-        } else if (fTeid->v4) {
-            gtp5g_pdr_set_local_f_teid(tmpPdr, teid, &(fTeid->addr4));
-        } else if (fTeid->v6) {
-            // TODO: ipv6
-            //gtp5g_pdr_set_local_f_teid(tmpPdr, teid, &(fTeid->addr6));
-        }
-    }
+    // Register PDR to Session
+    UTLT_Assert(UpfPDRRegisterToSession(session, &upfPdr),
+        return STATUS_ERROR, "UpfPDRRegisterToSession failed");
 
-    // UE IP
-    if (createPdr->pDI.uEIPAddress.presence) {
-        PfcpUeIpAddr *ueIp =
-            (PfcpUeIpAddr*)createPdr->pDI.uEIPAddress.value;
-        if (ueIp->v4 && ueIp->v6) {
-            // TODO: Dual Stack
-        } else if (ueIp->v4) {
-            gtp5g_pdr_set_ue_addr_ipv4(tmpPdr, &(ueIp->addr4));
-        } else if (ueIp->v6) {
-            // TODO: IPv6
-        }
-    }
-
-    // PDI SDF filter
-    uint16_t flowDescriptionLen = 0;
-    char *flowDescription = NULL;
-    if (createPdr->pDI.sDFFilter.presence) {
-        // Decode SDF
-        PfcpSDFFilterDescription des =
-            *(PfcpSDFFilterDescription*)createPdr->pDI.sDFFilter.value;
-
-        for (size_t idx = 2; idx < createPdr->pDI.sDFFilter.len;
-        /* Do nothing here */) {
-            if (des.fd) {
-                flowDescriptionLen =
-                    *(uint16_t*)((uint8_t*)createPdr->pDI.sDFFilter.value+idx);
-
-                flowDescription =
-                    UTLT_Calloc(flowDescriptionLen + 1, sizeof(uint8_t));
-                UTLT_Assert(flowDescription, idx += 2 + flowDescriptionLen; continue,
-                            "flow description allocate error");
-
-                memcpy(flowDescription,
-                       (uint8_t*)createPdr->pDI.sDFFilter.value+idx+2,
-                       flowDescriptionLen);
-
-                gtp5g_pdr_set_sdf_filter_description(tmpPdr, flowDescription);
-
-                idx += 2 + flowDescriptionLen;
-            } else if (des.ttc) {
-                /*
-                uint16_t tosTrafficClass =
-                    *(uint16_t*)((uint8_t*)createPdr->pDI.sDFFilter.value+idx);
-                */
-                UTLT_Warning("SDF ToS traffic class not implemented");
-                idx += 2;
-            } else if (des.spi) {
-                /*
-                uint32_t securityParameterIndex =
-                    *(uint32_t*)((uint8_t*)createPdr->pDI.sDFFilter.value+idx);
-                */
-                UTLT_Warning("SDF security paramenter index not implemented");
-                idx += 4;
-            } else if (des.fl) {
-                // TODO: Flow Label
-                UTLT_Warning("SDF flow label not implemented");
-                idx += 3;
-            } else if (des.bid) {
-                /*
-                uint32_t sDFFilterId =
-                    *(uint32_t*)((uint8_t*)createPdr->pDI.sDFFilter.value+idx);
-                */
-                UTLT_Warning("SDF filter id not implemented now");
-                idx += 4;
-            } else {
-                UTLT_Warning("Other tag not implements");
-                idx++;
-            }
-        }
-    }
-
-    // Outer Header Removal
-    if (createPdr->outerHeaderRemoval.presence) {
-        uint8_t outerHeader =
-            *(uint8_t*)createPdr->outerHeaderRemoval.value;
-        gtp5g_pdr_set_outer_header_removal(tmpPdr, outerHeader);
-    }
-
-    // FAR ID
-    if (createPdr->fARID.presence) {
-        uint32_t farId = *((uint32_t *)createPdr->fARID.value);
-        gtp5g_pdr_set_far_id(tmpPdr, farId);
-    }
-
-    // Send PDR to kernel
-    Status status = _pushPdrToKernel(tmpPdr, _PDR_ADD);
-    UTLT_Assert(status == STATUS_OK, return STATUS_ERROR,
-                "PDR not pushed to kernel");
-    gtp5g_pdr_free(tmpPdr);
-    UTLT_Assert(tmpPdr != NULL, return STATUS_ERROR,
-                "Free PDR struct error");
-    if (flowDescription) {
-        UTLT_Assert(UTLT_Free(flowDescription) == STATUS_OK, ,
-                    "Free flow description error");
-    }
-
-    // Set session point to pdr
-    UpfPdrId *pdrIdPtr = UpfPdrIdAdd(pdrId);
-    UTLT_Assert(pdrIdPtr, return STATUS_ERROR, "PdrId Add error");
-    ListAppend(&session->pdrIdList, pdrIdPtr);
     // Set buff relate pdr to session
-    UpfBufPacketAdd(session, pdrId);
+    UpfBufPacketAdd(session, pdrID);
 
     return STATUS_OK;
 }
 
-Status UpfN4HandleCreateFar(CreateFAR *createFar) {
+Status _ConvertCreateFARTlvToRule(UpfFAR *upfFar, CreateFAR *createFar) {
+    UTLT_Assert(upfFar && createFar, return STATUS_ERROR,
+        "UpfFAR or CreateFAR pointer should not be NULL");
+
+    char ipStr[INET6_ADDRSTRLEN];
+
+    if (createFar->fARID.presence) {
+        upfFar->flags.farId = 1;
+        upfFar->farId = ntohl(*((uint32_t *)createFar->fARID.value));
+        UTLT_Debug("FAR ID: %u", upfFar->farId);
+    }
+
+    if (createFar->applyAction.presence) {
+        upfFar->flags.applyAction = 1;
+        upfFar->applyAction = *((uint8_t *)(createFar->applyAction.value));
+        UTLT_Debug("FAR Apply Action: %u", upfFar->applyAction);
+    }
+
+    if (createFar->forwardingParameters.presence) {
+        upfFar->flags.forwardingParameters = 1;
+        ForwardingParameters *forwardingParameters = &createFar->forwardingParameters;
+        UPDK_ForwardingParameters *updkForwardingParameters = &upfFar->forwardingParameters;
+
+        if (forwardingParameters->destinationInterface.presence) {
+            updkForwardingParameters->flags.destinationInterface = 1;
+            updkForwardingParameters->destinationInterface = *((uint8_t *)(createFar->forwardingParameters.destinationInterface.value));
+            UTLT_Debug("Forwarding Parameters Destination Interface: %u", updkForwardingParameters->destinationInterface);
+        }
+
+        if (forwardingParameters->networkInstance.presence) {
+            updkForwardingParameters->flags.networkInstance = 1;
+            UTLT_Assert(forwardingParameters->networkInstance.len < sizeof(updkForwardingParameters->networkInstance),
+                return STATUS_ERROR, "Need more space to store Network Instance in FAR");
+            strncpy(updkForwardingParameters->networkInstance, forwardingParameters->networkInstance.value,
+                forwardingParameters->networkInstance.len);
+            UTLT_Debug("Forwarding Parameters Network Instance: %u", updkForwardingParameters->destinationInterface);
+        }
+
+        if (forwardingParameters->outerHeaderCreation.presence) {
+            updkForwardingParameters->flags.outerHeaderCreation = 1;
+            PfcpOuterHdr *outerHdr = (PfcpOuterHdr *) (forwardingParameters->outerHeaderCreation.value);
+            UPDK_OuterHeaderCreation *updkOuterHeaderCreation = &updkForwardingParameters->outerHeaderCreation;
+
+            updkOuterHeaderCreation->description = *((uint8_t *) outerHdr);
+            UTLT_Debug("Outer Header Creation Description: %u", updkOuterHeaderCreation->description);
+
+            if (outerHdr->gtpuIpv4 || outerHdr->gtpuIpv6) {
+                updkOuterHeaderCreation->teid = ntohl(outerHdr->teid);
+                UTLT_Debug("Outer Header Creation TEID: %u", updkOuterHeaderCreation->teid);
+            }
+
+            if (outerHdr->udpIpv4 || outerHdr->gtpuIpv4) {
+                updkOuterHeaderCreation->ipv4 = outerHdr->addr4;
+                inet_ntop(AF_INET, &updkOuterHeaderCreation->ipv4, ipStr, INET_ADDRSTRLEN);
+                UTLT_Debug("Outer Header Creation IPv4: %s", ipStr);
+
+                if (!outerHdr->gtpuIpv4) {
+                    updkOuterHeaderCreation->port = ntohs(outerHdr->port);
+                    UTLT_Debug("Outer Header Creation Port: %u", updkOuterHeaderCreation->port);
+                }
+            }
+
+            if (outerHdr->udpIpv6 || outerHdr->gtpuIpv6) {
+                updkOuterHeaderCreation->ipv6 = outerHdr->addr6;
+                inet_ntop(AF_INET6, &updkOuterHeaderCreation->ipv6, ipStr, INET6_ADDRSTRLEN);
+                UTLT_Debug("Outer Header Creation IPv6: %s", ipStr);
+
+                if (!outerHdr->gtpuIpv6) {
+                    updkOuterHeaderCreation->port = ntohs(outerHdr->port);
+                    UTLT_Debug("Outer Header Creation Port: %u", updkOuterHeaderCreation->port);
+                }
+            }
+        }
+
+        if (forwardingParameters->forwardingPolicy.presence) {
+            updkForwardingParameters->flags.forwardingPolicy = 1;
+            uint8_t *forwardingPolicy = forwardingParameters->forwardingPolicy.value;
+            UPDK_ForwardingPolicy *updkForwardingPolicy = &updkForwardingParameters->forwardingPolicy;
+
+            updkForwardingPolicy->forwardingPolicyIdentifierLength = forwardingPolicy[0];
+            UTLT_Assert(forwardingPolicy[0] < sizeof(updkForwardingPolicy->forwardingPolicyIdentifier), return STATUS_ERROR,
+                "Forwarding Policy Identifier is too long");
+            memcpy(updkForwardingPolicy->forwardingPolicyIdentifier, &forwardingPolicy[1], forwardingPolicy[0]);
+            updkForwardingPolicy->forwardingPolicyIdentifier[forwardingPolicy[0]] = 0;
+        }
+    }
+
+    return STATUS_OK;
+}
+
+Status UpfN4HandleCreateFar(UpfSession *session, CreateFAR *createFar) {
     UTLT_Debug("Handle Create FAR");
-    UpfFar *tmpFar = NULL;
+
     UTLT_Assert(createFar->fARID.presence, return STATUS_ERROR,
                 "Far ID not presence");
     UTLT_Assert(createFar->applyAction.presence,
                 return STATUS_ERROR, "Apply Action not presence");
 
-    // Create FAR
-    tmpFar = gtp5g_far_alloc();
-    UTLT_Assert(tmpFar, return STATUS_ERROR, "FAR allocate error");
+    UpfFAR upfFar;
+    memset(&upfFar, 0, sizeof(UpfFAR));
 
-    // FarId
-    uint32_t farId = *((uint32_t *)createFar->fARID.value);
-    UTLT_Debug("FAR ID: %u", ntohl(farId));
-    gtp5g_far_set_id(tmpFar, farId);
+    uint32_t farID = ntohl(*((uint32_t*) createFar->fARID.value));
+    UTLT_Assert(UpfFARFindByID(farID, &upfFar), return STATUS_ERROR, "FAR ID[%u] does exist in UPF Context", farID);
 
-    // Apply Action
-    uint8_t applyAction = *((uint8_t *)(createFar->applyAction.value));
-    gtp5g_far_set_apply_action(tmpFar, applyAction);
+    // TODO: Need to store the rule in UPF
+    
 
-    // Forwarding Parameters
-    if (createFar->forwardingParameters.presence) {
-        // Destination Interface
-        /*
-          if (createFar->forwardingParameters.destinationInterface.presence) {
-          uint8_t destinationInterface =
-          *((uint8_t *)(createFar->forwardingParameters.destinationInterface.value));
-          }
-          // Network Instance
-          if (createFar->forwardingParameters.networkInstance.presence) {
-          }
-        */
-        // Outer Header Creation
-        if (createFar->forwardingParameters.outerHeaderCreation.presence) {
-            PfcpOuterHdr *outerHdr = (PfcpOuterHdr *)
-                (createFar->forwardingParameters.outerHeaderCreation.value);
-            uint16_t description = *((uint16_t *)outerHdr);
+    UTLT_Assert(_ConvertCreateFARTlvToRule(&upfFar, createFar) == STATUS_OK,
+        return STATUS_ERROR, "Convert FAR TLV To Rule is failed");
 
-            if (outerHdr->gtpuIpv4 || outerHdr->udpIpv4) {
-                gtp5g_far_set_outer_header_creation(tmpFar, description,
-                                                    outerHdr->teid,
-                                                    &(outerHdr->addr4),
-                                                    htons(2152));
-            } else if (outerHdr->udpIpv4) {
-                // only with UDP enabled has port number
-                gtp5g_far_set_outer_header_creation(tmpFar, description,
-                                                    0, &(outerHdr->addr4),
-                                                    outerHdr->port);
-            }
-        }
-    }
-
-    // Send FAR to kernel
-    Status status = _pushFarToKernel(tmpFar, _FAR_ADD);
-    UTLT_Assert(status == STATUS_OK, return STATUS_ERROR,
-                "FAR not pushed to kernel");
-    gtp5g_far_free(tmpFar);
-    UTLT_Assert(tmpFar != NULL, return STATUS_ERROR,
-                "Free FAR struct error");
+    // Using UPDK API
+    UTLT_Assert(Gtpv1TunnelCreateFAR(&upfFar) == 0, return STATUS_ERROR,
+        "Gtpv1TunnelCreateFAR failed");
+    
+    // Register FAR to Session
+    UTLT_Assert(UpfFARRegisterToSession(session, &upfFar),
+        return STATUS_ERROR, "UpfFARRegisterToSession failed");
 
     return STATUS_OK;
 }
 
-Status UpfN4HandleUpdatePdr(UpdatePDR *updatePdr) {
+Status _ConvertUpdatePDRTlvToRule(UpfPDR *upfPdr, UpdatePDR *updatePDR) {
+    UTLT_Assert(upfPdr && updatePDR, return STATUS_ERROR,
+        "UpfPDR or UpdatePDR pointer should not be NULL");
+
+    char ipStr[INET6_ADDRSTRLEN];
+    struct in_addr *ipv4Ptr;
+    struct in6_addr *ipv6Ptr;
+
+    if (updatePDR->pDRID.presence) {
+        upfPdr->flags.pdrId = 1;
+        upfPdr->pdrId = ntohs(*((uint16_t *)updatePDR->pDRID.value));
+        UTLT_Debug("PDR ID: %u", upfPdr->pdrId);
+    }
+
+    if (updatePDR->precedence.presence) {
+        upfPdr->flags.precedence = 1;
+        upfPdr->precedence = ntohl(*((uint32_t *)updatePDR->precedence.value));
+        UTLT_Debug("PDR ID: %u", upfPdr->precedence);
+    }
+
+    if (updatePDR->pDI.presence) {
+        upfPdr->flags.pdi = 1;
+        PDI *pdi = &updatePDR->pDI;
+        UPDK_PDI *updkPdi = &upfPdr->pdi;
+
+        if (pdi->sourceInterface.presence) {
+            updkPdi->flags.sourceInterface = 1;
+            updkPdi->sourceInterface = *((uint8_t *)(pdi->sourceInterface.value));
+            UTLT_Debug("PDI Source Interface: %u", updkPdi->sourceInterface);
+        }
+
+        if (pdi->localFTEID.presence) {
+            updkPdi->flags.fTeid = 1;
+            UPDK_FTEID *updkFTeid = &updkPdi->fTeid;
+            PfcpFTeid *fTeid = (PfcpFTeid *)updatePDR->pDI.localFTEID.value;
+            
+            // Copy flags in F-TEID
+            memcpy(updkFTeid, fTeid, sizeof(uint8_t));
+
+            updkFTeid->teid = ntohl(fTeid->teid);
+            UTLT_Debug("F-TEID TEID: %u", updkFTeid->teid);
+
+            if (fTeid->v4 && fTeid->v6) {
+                ipv4Ptr = &fTeid->dualStack.addr4;
+                ipv6Ptr = &fTeid->dualStack.addr6;
+            } else {
+                ipv4Ptr = &fTeid->addr4;
+                ipv6Ptr = &fTeid->addr6;
+            }
+
+            if (fTeid->v4) {
+                updkFTeid->ipv4 = *ipv4Ptr;
+                inet_ntop(AF_INET, &updkFTeid->ipv4, ipStr, INET_ADDRSTRLEN);
+                UTLT_Debug("F-TEID IPv4: %s", ipStr);
+            }
+
+            if (fTeid->v6) {
+                updkFTeid->ipv6 = *ipv6Ptr;
+                inet_ntop(AF_INET6, &updkFTeid->ipv6, ipStr, INET6_ADDRSTRLEN);
+                UTLT_Debug("F-TEID IPv6: %s", ipStr);
+            }
+
+            if (fTeid->chid) {
+                updkFTeid->chooseId = fTeid->chooseId;
+                UTLT_Debug("F-TEID Choose ID: %u", updkFTeid->chooseId);
+            }
+        }
+
+        if (pdi->uEIPAddress.presence) {
+            updkPdi->flags.ueIpAddress = 1;
+            UPDK_UEIPAddress *updkUeIpAddresss = &updkPdi->ueIpAddress;
+            PfcpUeIpAddr *ueIp = (PfcpUeIpAddr*)updatePDR->pDI.uEIPAddress.value;
+
+            // Copy flags in UE IP Address
+            memcpy(updkUeIpAddresss, ueIp, sizeof(uint8_t));
+
+            if (ueIp->v4 && ueIp->v6) {
+                ipv4Ptr = &ueIp->dualStack.addr4;
+                ipv6Ptr = &ueIp->dualStack.addr6;
+            } else {
+                ipv4Ptr = &ueIp->addr4;
+                ipv6Ptr = &ueIp->addr6;
+            }
+
+            if (ueIp->v4) {
+                updkUeIpAddresss->ipv4 = *ipv4Ptr;
+                inet_ntop(AF_INET, &updkUeIpAddresss->ipv4, ipStr, INET_ADDRSTRLEN);
+                UTLT_Debug("UE IP Address IPv4: %s", ipStr);
+            }
+
+            if (ueIp->v6) {
+                updkUeIpAddresss->ipv6 = *ipv6Ptr;
+                inet_ntop(AF_INET6, &updkUeIpAddresss->ipv6, ipStr, INET6_ADDRSTRLEN);
+                UTLT_Debug("UE IP Address IPv6: %s", ipStr);
+            }
+
+            if (ueIp->ipv6d) {
+                updkUeIpAddresss->ipv6PrefixDelegationBit = ueIp->ipv6PrefixDelegationBit;
+                UTLT_Debug("UE IP Address IPv6 Prefix Delegation Bit: %u", ipStr);
+            }
+        }
+
+        if (pdi->sDFFilter.presence) {
+            updkPdi->flags.sdfFilter = 1;
+            UPDK_SDFFilter *updkSdfFilter = &updkPdi->sdfFilter;
+            PfcpSDFFilterDescription *des = (PfcpSDFFilterDescription*) pdi->sDFFilter.value;
+
+            // Copy flags in UE IP Address
+            memcpy(updkSdfFilter, des, sizeof(uint8_t));
+
+            for (size_t idx = 2; idx < updatePDR->pDI.sDFFilter.len; /* Do nothing here */) {
+                if (des->fd) {
+                    // TODO: Need to Check if it is correct
+                    updkSdfFilter->lenOfFlowDescription = ntohs(*(uint16_t *) ((uint8_t *) pdi->sDFFilter.value + idx));
+
+                    // TODO: dynamic alloc?
+                    UTLT_Assert(sizeof(updkSdfFilter->flowDescription) > updkSdfFilter->lenOfFlowDescription,
+                        continue, "Need more space to store Flow Description");
+                    
+                    strncpy(updkSdfFilter->flowDescription, pdi->sDFFilter.value+idx+2,
+                       updkSdfFilter->lenOfFlowDescription);
+                    
+                    idx += 2 + updkSdfFilter->lenOfFlowDescription;
+
+                    UTLT_Debug("SDF Filter Flow Description: %s", updkSdfFilter->flowDescription);
+                } else if (des->ttc) {
+                    updkSdfFilter->tosTrafficClass = ntohs(*(uint16_t *)((uint8_t *) pdi->sDFFilter.value+idx));
+                    idx += 2;
+
+                    UTLT_Debug("SDF Filter ToS Traffic Class: %u", updkSdfFilter->tosTrafficClass);
+                } else if (des->spi) {
+                    updkSdfFilter->securityParameterIndex = ntohl(*(uint32_t *)((uint8_t *) pdi->sDFFilter.value+idx));
+                    idx += 4;
+
+                    UTLT_Debug("SDF Filter Security Parameter Index: %u", updkSdfFilter->securityParameterIndex);
+                } else if (des->fl) {
+                    memcpy(updkSdfFilter->flowLabel, (uint8_t *) pdi->sDFFilter.value+idx, sizeof(char) * 3);
+                    idx += 3;
+
+                    UTLT_Debug("SDF Filter Flow Label: %c%c%c",
+                        updkSdfFilter->flowLabel[0], updkSdfFilter->flowLabel[2], updkSdfFilter->flowLabel[3]);
+                } else if (des->bid) {
+                    updkSdfFilter->sdfFilterId = ntohl(*(uint32_t*)((uint8_t*)updatePDR->pDI.sDFFilter.value+idx));
+                    UTLT_Debug("SDF Filter SDF Filter Id: %u", updkSdfFilter->sdfFilterId);
+                    idx += 4;
+                } else {
+                    UTLT_Warning("Other tag not implements");
+                    idx++;
+                }
+            }
+        }
+    }
+
+    if (updatePDR->outerHeaderRemoval.presence) {
+        upfPdr->flags.outerHeaderRemoval = 1;
+        upfPdr->outerHeaderRemoval = *((uint8_t *)(updatePDR->outerHeaderRemoval.value));
+        UTLT_Debug("PDR Outer Header Removal: %u", upfPdr->outerHeaderRemoval);
+    }
+
+    if (updatePDR->fARID.presence) {
+        upfPdr->flags.farId = 1;
+        upfPdr->farId = ntohl(*((uint32_t *)updatePDR->fARID.value));
+        UTLT_Debug("PDR FAR ID: %u", upfPdr->farId);
+    }
+
+    if (updatePDR->uRRID.presence) {
+        // TODO: Need to handle multiple URR
+        /*
+        upfPdr->flags.urrId = 1;
+        upfPdr->urrId = ntohl(*((uint32_t *)updatePDR->uRRID.value));
+        UTLT_Debug("PDR URR ID: %u", upfPdr->farId);
+        */
+        UTLT_Warning("UPF do NOT support URR yet");
+    }
+
+    if (updatePDR->qERID.presence) {
+        // TODO: Need to handle multiple QER
+        /*
+        upfPdr->flags.qerId = 1;
+        upfPdr->qerId = ntohl(*((uint32_t *)updatePDR->qERID.value));
+        UTLT_Debug("PDR QER ID: %u", upfPdr->qerId);
+        */
+        UTLT_Warning("UPF do NOT support QER yet");
+    }
+
+    if (updatePDR->activatePredefinedRules.presence) {
+        // TODO: Need to support
+        UTLT_Warning("UPF do NOT support Activate Predefined Rules yet");
+    }
+
+    if (updatePDR->deactivatePredefinedRules.presence) {
+        // TODO: Need to support
+        UTLT_Warning("UPF do NOT support Deactivate Predefined Rules yet");
+    }
+
+    return STATUS_OK;
+}
+
+Status UpfN4HandleUpdatePdr(UpfSession *session, UpdatePDR *updatePdr) {
     UTLT_Debug("Handle Update PDR");
-    UpfPdr *tmpPdr = NULL;
+
     UTLT_Assert(updatePdr->pDRID.presence == 1,
                 return STATUS_ERROR, "updatePDR no pdrId");
 
-    // Find PDR
-    uint16_t pdrId = *((uint16_t*)updatePdr->pDRID.value);
+    UpfPDR upfPdr;
+    memset(&upfPdr, 0, sizeof(UpfPDR));
 
-    /*
-    Gtpv1TunDevNode *gtpv1Dev4 =
-        (Gtpv1TunDevNode*)ListFirst(&Self()->gtpv1DevList);
-    UTLT_Assert(gtpv1Dev4, return STATUS_ERROR, "No GTP Device");
-    tmpPdr = GtpTunnelFindPdrById(gtpv1Dev4->ifname, pdrId);
-    UTLT_Assert(tmpPdr, return STATUS_ERROR,
-                "[PFCP] UpdatePDR PDR[%u] not found", ntohs(pdrId));
-    */
-    tmpPdr = gtp5g_pdr_alloc();
-    UTLT_Assert(tmpPdr, return STATUS_ERROR, "pdr alloc error");
-    gtp5g_pdr_set_id(tmpPdr, pdrId);
+    uint16_t pdrID = ntohs(*((uint16_t *)updatePdr->pDRID.value));
+    UTLT_Assert(!UpfPDRFindByID(pdrID, &upfPdr), return STATUS_ERROR, "PDR ID[%u] does NOT exist in UPF Context", pdrID);
 
-    // TODO: other IE of update PDR
-    if (updatePdr->outerHeaderRemoval.presence) {
-        gtp5g_pdr_set_outer_header_removal(tmpPdr,
-            *((uint8_t*)(updatePdr->outerHeaderRemoval.value)));
-    }
-    if (updatePdr->precedence.presence) {
-        gtp5g_pdr_set_precedence(tmpPdr,
-                                 *((uint32_t *)(updatePdr->precedence.value)));
-    }
-    if (updatePdr->pDI.presence) {
-        if (updatePdr->pDI.localFTEID.presence) {
-            PfcpFTeid *fTeid = (PfcpFTeid*)updatePdr->pDI.localFTEID.value;
-            uint32_t teid = fTeid->teid;
+    UTLT_Assert(_ConvertUpdatePDRTlvToRule(&upfPdr, updatePdr) == STATUS_OK,
+        return STATUS_ERROR, "Convert PDR TLV To Rule is failed");
 
-            if (fTeid->v4 && fTeid->v6) {
-                // TODO: Dual Stack
-            } else if (fTeid->v4) {
-                gtp5g_pdr_set_local_f_teid(tmpPdr, teid, &(fTeid->addr4));
-            } else if (fTeid->v6) {
-                // TODO: ipv6
-                //gtp5g_pdr_set_local_f_teid(tmpPdr, teid, &(fTeid->addr6));
-            }
-        }
-        if (updatePdr->pDI.uEIPAddress.presence) {
-            PfcpUeIpAddr *ueIp =
-                (PfcpUeIpAddr*)updatePdr->pDI.uEIPAddress.value;
-            if (ueIp->v4 && ueIp->v6) {
-                // TODO: Dual Stack
-            } else if (ueIp->v4) {
-                gtp5g_pdr_set_ue_addr_ipv4(tmpPdr, &(ueIp->addr4));
-            } else if (ueIp->v6) {
-                // TODO: IPv6
-            }
-        }
-    }
-    if (updatePdr->fARID.presence) {
-        gtp5g_pdr_set_far_id(tmpPdr, *(uint32_t *)updatePdr->fARID.value);
-    }
+    // Using UPDK API
+    UTLT_Assert(Gtpv1TunnelUpdatePDR(&upfPdr) == 0, return STATUS_ERROR,
+        "Gtpv1TunnelUpdatePDR failed");
 
-    // update PDR to kernel
-    Status status = _pushPdrToKernel(tmpPdr, _PDR_MOD);
-    UTLT_Assert(status == STATUS_OK, return STATUS_ERROR,
-                "PDR not pushed to kernel");
-    gtp5g_pdr_free(tmpPdr);
-    UTLT_Assert(tmpPdr != NULL, return STATUS_ERROR,
-                "Free PDR struct error");
+    // Register PDR to Session
+    UTLT_Assert(UpfPDRRegisterToSession(session, &upfPdr),
+        return STATUS_ERROR, "UpfPDRRegisterToSession failed");
 
     return STATUS_OK;
 }
 
-Status UpfN4HandleUpdateFar(UpdateFAR *updateFar) {
+Status _ConvertUpdateFARTlvToRule(UpfFAR *upfFar, UpdateFAR *updateFAR) {
+    UTLT_Assert(upfFar && updateFAR, return STATUS_ERROR,
+        "UpfFAR or UpdateFAR pointer should not be NULL");
+
+    char ipStr[INET6_ADDRSTRLEN];
+
+    if (updateFAR->fARID.presence) {
+        upfFar->flags.farId = 1;
+        upfFar->farId = ntohl(*((uint32_t *)updateFAR->fARID.value));
+        UTLT_Debug("FAR ID: %u", upfFar->farId);
+    }
+
+    if (updateFAR->applyAction.presence) {
+        upfFar->flags.applyAction = 1;
+        upfFar->applyAction = *((uint8_t *)(updateFAR->applyAction.value));
+        UTLT_Debug("FAR Apply Action: %u", upfFar->applyAction);
+    }
+
+    if (updateFAR->updateForwardingParameters.presence) {
+        upfFar->flags.forwardingParameters = 1;
+        UpdateForwardingParameters *forwardingParameters = &updateFAR->updateForwardingParameters;
+        UPDK_ForwardingParameters *updkForwardingParameters = &upfFar->forwardingParameters;
+
+        if (forwardingParameters->destinationInterface.presence) {
+            updkForwardingParameters->flags.destinationInterface = 1;
+            updkForwardingParameters->destinationInterface = *((uint8_t *)(forwardingParameters->destinationInterface.value));
+            UTLT_Debug("Forwarding Parameters Destination Interface: %u", updkForwardingParameters->destinationInterface);
+        }
+
+        if (forwardingParameters->networkInstance.presence) {
+            updkForwardingParameters->flags.networkInstance = 1;
+            UTLT_Assert(forwardingParameters->networkInstance.len < sizeof(updkForwardingParameters->networkInstance),
+                return STATUS_ERROR, "Need more space to store Network Instance in FAR");
+            strncpy(updkForwardingParameters->networkInstance, forwardingParameters->networkInstance.value,
+                forwardingParameters->networkInstance.len);
+            UTLT_Debug("Forwarding Parameters Network Instance: %u", updkForwardingParameters->destinationInterface);
+        }
+
+        if (forwardingParameters->outerHeaderCreation.presence) {
+            updkForwardingParameters->flags.outerHeaderCreation = 1;
+            PfcpOuterHdr *outerHdr = (PfcpOuterHdr *) (forwardingParameters->outerHeaderCreation.value);
+            UPDK_OuterHeaderCreation *updkOuterHeaderCreation = &updkForwardingParameters->outerHeaderCreation;
+
+            updkOuterHeaderCreation->description = *((uint8_t *) outerHdr);
+            UTLT_Debug("Outer Header Creation Description: %u", updkOuterHeaderCreation->description);
+ 
+            if (outerHdr->gtpuIpv4 || outerHdr->gtpuIpv6) {
+                updkOuterHeaderCreation->teid = ntohl(outerHdr->teid);
+                UTLT_Debug("Outer Header Creation TEID: %u", updkOuterHeaderCreation->teid);
+            }
+
+            if (outerHdr->udpIpv4 || outerHdr->gtpuIpv4) {
+                updkOuterHeaderCreation->ipv4 = outerHdr->addr4;
+                inet_ntop(AF_INET, &updkOuterHeaderCreation->ipv4, ipStr, INET_ADDRSTRLEN);
+                UTLT_Debug("Outer Header Creation IPv4: %s", ipStr);
+
+                if (!outerHdr->gtpuIpv4) {
+                    updkOuterHeaderCreation->port = ntohs(outerHdr->port);
+                    UTLT_Debug("Outer Header Creation Port: %u", updkOuterHeaderCreation->port);
+                }
+            }
+
+            if (outerHdr->udpIpv6 || outerHdr->gtpuIpv6) {
+                updkOuterHeaderCreation->ipv6 = outerHdr->addr6;
+                inet_ntop(AF_INET6, &updkOuterHeaderCreation->ipv6, ipStr, INET6_ADDRSTRLEN);
+                UTLT_Debug("Outer Header Creation IPv6: %s", ipStr);
+
+                if (!outerHdr->gtpuIpv6) {
+                    updkOuterHeaderCreation->port = ntohs(outerHdr->port);
+                    UTLT_Debug("Outer Header Creation Port: %u", updkOuterHeaderCreation->port);
+                }
+            }
+        }
+
+        if (forwardingParameters->forwardingPolicy.presence) {
+            updkForwardingParameters->flags.forwardingPolicy = 1;
+            uint8_t *forwardingPolicy = forwardingParameters->forwardingPolicy.value;
+            UPDK_ForwardingPolicy *updkForwardingPolicy = &updkForwardingParameters->forwardingPolicy;
+
+            updkForwardingPolicy->forwardingPolicyIdentifierLength = forwardingPolicy[0];
+            UTLT_Assert(forwardingPolicy[0] < sizeof(updkForwardingPolicy->forwardingPolicyIdentifier), return STATUS_ERROR,
+                "Forwarding Policy Identifier is too long");
+            memcpy(updkForwardingPolicy->forwardingPolicyIdentifier, &forwardingPolicy[1], forwardingPolicy[0]);
+            updkForwardingPolicy->forwardingPolicyIdentifier[forwardingPolicy[0]] = 0;
+        }
+    }
+
+    return STATUS_OK;
+}
+
+Status UpfN4HandleUpdateFar(UpfSession *session, UpdateFAR *updateFar) {
     UTLT_Debug("Handle Update FAR");
-    UpfFar *tmpFar = NULL;
+
     UTLT_Assert(updateFar->fARID.presence,
                 return STATUS_ERROR, "Far ID not presence");
 
-    // Record if need to send buffer
-    uint8_t sendBufMarker = 0;
-    // Find FAR
-    uint32_t farId = *((uint32_t *)updateFar->fARID.value);
+    UpfFAR upfFar;
+    memset(&upfFar, 0, sizeof(UpfFAR));
 
-    Gtpv1TunDevNode *gtpv1Dev4 =
-        (Gtpv1TunDevNode*)ListFirst(&Self()->gtpv1DevList);
-    UTLT_Assert(gtpv1Dev4, return STATUS_ERROR, "No GTP Device");
-    char *gtpIfname = gtpv1Dev4->ifname;
+    uint32_t farID = ntohl(*((uint32_t *)updateFar->fARID.value));
+    UTLT_Assert(!UpfFARFindByID(farID, &upfFar), return STATUS_ERROR, "FAR ID[%u] does NOT exist in UPF Context", farID);
 
-    UpfFar *oldFar = GtpTunnelFindFarById(gtpIfname, farId);
-    UTLT_Assert(oldFar, return STATUS_ERROR,
-                "[PFCP] UpdateFAR FAR[%u] not found", ntohl(farId));
+    UTLT_Assert(_ConvertUpdateFARTlvToRule(&upfFar, updateFar) == STATUS_OK,
+        return STATUS_ERROR, "Convert FAR TLV To Rule is failed");
 
-    // Create been updated far
-    tmpFar = gtp5g_far_alloc();
-    UTLT_Assert(tmpFar, return STATUS_ERROR, "FAR allocate error");
-    gtp5g_far_set_id(tmpFar, farId);
+    // Get old apply action to check its changing
+    uint8_t oldAction;
+    UTLT_Assert(HowToHandleThisPacket(farID, &oldAction) == STATUS_OK, return STATUS_ERROR, "Can NOT find origin FAR action");
 
-    // update Apply Action
-    if (updateFar->applyAction.presence) {
-        uint8_t applyAction = *(uint8_t*)updateFar->applyAction.value;
-        gtp5g_far_set_apply_action(tmpFar, applyAction);
-        if ((applyAction & PFCP_FAR_APPLY_ACTION_FORW)) {
-            //(*gtp5g_far_get_apply_action(oldFar) & PFCP_FAR_APPLY_ACTION_BUFF)) {
-            sendBufMarker = 1;
+    // Using UPDK API
+    UTLT_Assert(Gtpv1TunnelUpdateFAR(&upfFar) == 0, return STATUS_ERROR,
+        "Gtpv1TunnelUpdateFAR failed");
+
+    // Register FAR to Session
+    UTLT_Assert(UpfFARRegisterToSession(session, &upfFar),
+        return STATUS_ERROR, "UpfFARRegisterToSession failed");
+
+    // Buffered packet handle
+    if ((oldAction & PFCP_FAR_APPLY_ACTION_BUFF)) {
+        Sock *sock = &Self()->upSock;
+
+        UpfBufPacket *bufPacket;
+        if (upfFar.applyAction & PFCP_FAR_APPLY_ACTION_DROP) {
+            UpfPDRNode *node, *nextNode = NULL;
+            ListForEachSafe(node, nextNode, &session->pdrList) {
+                UTLT_Assert((bufPacket = UpfBufPacketFindByPdrId(node->pdr.pdrId)), continue, "");
+                UpfBufPacketRemove(bufPacket);
+            }
+        } else if (upfFar.applyAction & PFCP_FAR_APPLY_ACTION_FORW) {
+            sock->remoteAddr._family = sock->localAddr._family;
+            sock->remoteAddr._port = sock->localAddr._port;
+            
+            if (sock->localAddr._family == AF_INET)
+                sock->remoteAddr.s4.sin_addr = upfFar.forwardingParameters.outerHeaderCreation.ipv4;
+            else
+                UTLT_Warning("Do NOT support IPv6 yet");
+            
+            UpfPDRNode *node, *nextNode = NULL;
+            ListForEachSafe(node, nextNode, &session->pdrList) {
+                UTLT_Assert(UpSendPacketByPdrFar(&node->pdr, &upfFar, sock) == STATUS_OK,
+                    continue, "UpSendPacketByPdrFar failed: PDR ID[%u], FAR ID[%u]", node->pdr.pdrId, node->pdr.farId);
+            }
         }
-    }
-    // update Forwarding parameters
-    if (updateFar->updateForwardingParameters.outerHeaderCreation.presence) {
-        PfcpOuterHdr *outerHdr = (PfcpOuterHdr *)
-            (updateFar->updateForwardingParameters.outerHeaderCreation.value);
-        uint16_t description = *((uint16_t *)outerHdr);
-
-        if (outerHdr->gtpuIpv4) {
-            gtp5g_far_set_outer_header_creation(tmpFar, description,
-                                                outerHdr->teid,
-                                                &(outerHdr->addr4),
-                                                htons(2152));
-        } else if (outerHdr->udpIpv4) {
-            // TODO: Check if no teid, which should put
-            gtp5g_far_set_outer_header_creation(tmpFar, description,
-                                                0, &(outerHdr->addr4),
-                                                outerHdr->port);
-        }
-    }
-    // TODO: update Duplicating parameters
-    // TODO: update BAR
-
-    // TODO: update FAR to kernel
-    Status status = _pushFarToKernel(tmpFar, _FAR_MOD);
-    UTLT_Assert(status == STATUS_OK, return STATUS_ERROR,
-                "FAR not pushed to kernel");
-    gtp5g_far_free(tmpFar);
-    UTLT_Assert(tmpFar != NULL, return STATUS_ERROR,
-                "Free FAR struct error");
-    gtp5g_far_free(oldFar);
-    UTLT_Assert(oldFar != NULL, return STATUS_ERROR,
-                "Free FAR struct error");
-
-    // Send buffer if need
-    // Send here because I'm not sure updateFar will update forwarding
-    // parameter or not
-    if (sendBufMarker) {
-        UpfFar *newFar = GtpTunnelFindFarById(gtpIfname, farId);
-        UTLT_Assert(newFar, return STATUS_ERROR,
-                    "[PFCP] UpdateFAR FAR[%u] not found", ntohl(farId));
-        // Check if pdr Packet full of packet
-        int pdrNum = *gtp5g_far_get_related_pdr_num(newFar);
-        uint16_t *pdrIdList = gtp5g_far_get_related_pdr_list(newFar);
-        // Send buffer back to Gtp Dev
-        Sock *sock = ((Gtpv1TunDevNode*)
-                        ListFirst(&Self()->gtpv1DevList))->sock;
-        sock->remoteAddr._family = sock->localAddr._family;
-        sock->remoteAddr._port = sock->localAddr._port;
-        if (sock->localAddr._family == AF_INET) {
-            sock->remoteAddr.s4.sin_addr =
-                *gtp5g_far_get_outer_header_creation_peer_addr_ipv4(newFar);
-        } else {
-            // TODO: IPv6
-        }
-
-        for (size_t idx = 0; idx < pdrNum; ++idx) {
-            UpfPdr *tmpPdr = GtpTunnelFindPdrById(gtpIfname, pdrIdList[idx]);
-            UpSendPacketByPdrFar(tmpPdr, newFar, sock);
-            gtp5g_pdr_free(tmpPdr);
-            UTLT_Assert(tmpPdr != NULL, return STATUS_ERROR,
-                        "Free PDR struct error");
-        }
-        // FIXME: free pdrIdList
-
-        gtp5g_far_free(newFar);
-        UTLT_Assert(newFar != NULL, return STATUS_ERROR,
-                    "Free FAR struct error");
     }
 
     return STATUS_OK;
 }
 
-Status UpfN4HandleRemovePdr(UpfSession *session, uint16_t pdrId) {
-    UTLT_Debug("Handle Remove PDR[%u]", ntohs(pdrId));
-    UTLT_Assert(ntohs(pdrId), return STATUS_ERROR, "pdrId cannot be 0");
+Status _ConvertRemovePDRTlvToRule(UpfPDR *upfPdr, uint16_t nPDRID) {
+    // TODO: Need to Find the PDR stored in UPF
+    upfPdr->flags.pdrId = 1;
+    upfPdr->pdrId = ntohs(nPDRID);
+
+    return STATUS_OK;
+}
+
+Status UpfN4HandleRemovePdr(UpfSession *session, uint16_t nPDRID) {
+    uint16_t pdrID = ntohs(nPDRID);
+
+    UTLT_Debug("Handle Remove PDR[%u]", pdrID);
+    UTLT_Assert(pdrID, return STATUS_ERROR, "PDR ID cannot be 0");
     UTLT_Assert(session, return STATUS_ERROR,
                 "session not found");
 
-    UpfPdrId *sessionPdrIdPtr = ListFirst(&session->pdrIdList);
-    while (sessionPdrIdPtr) {
-        if (sessionPdrIdPtr->pdrId == pdrId) {
-            Gtpv1TunDevNode *gtpv1Dev4 =
-                (Gtpv1TunDevNode*)ListFirst(&Self()->gtpv1DevList);
-            UTLT_Assert(gtpv1Dev4, return STATUS_ERROR, "No GTP Device");
-            Status status = GtpTunnelDelPdr(gtpv1Dev4->ifname, pdrId);
-            UTLT_Assert(status == STATUS_OK, return STATUS_ERROR,
-                        "PDR[%u] delete failed", ntohs(pdrId));
+    UpfPDR upfPdr;
+    memset(&upfPdr, 0, sizeof(UpfPDR));
 
-            // Remove PDR ID from session
-            ListRemove(&session->pdrIdList, sessionPdrIdPtr);
-            UpfPdrIdRemove(sessionPdrIdPtr);
-            // Remove buff
-            UpfBufPacket *tmpBufPacket = UpfBufPacketFindByPdrId(pdrId);
-            UpfBufPacketRemove(tmpBufPacket);
-            return STATUS_OK;
-        }
+    UTLT_Assert(!UpfPDRFindByID(pdrID, &upfPdr), return STATUS_ERROR, "PDR ID[%u] does NOT exist in UPF Context", pdrID);    
 
-        sessionPdrIdPtr = (UpfPdrId *)ListNext(sessionPdrIdPtr);
-    }
+    UTLT_Assert(_ConvertRemovePDRTlvToRule(&upfPdr, nPDRID) == STATUS_OK,
+            return STATUS_ERROR, "Convert PDR TLV To Rule is failed");
 
-    UTLT_Warning("PDR[%u] not in this session, PDR not removed", ntohs(pdrId));
+    // Using UPDK API
+    UTLT_Assert(Gtpv1TunnelRemovePDR(&upfPdr) == 0, return STATUS_ERROR,
+        "Gtpv1TunnelRemovePDR failed");
+    
+    // Remove Buffering packet
+    UpfBufPacket *packetStorage = UpfBufPacketFindByPdrId(pdrID);
+    if (packetStorage)
+        UpfBufPacketRemove(packetStorage);
+
+    // Deregister PDR to Session
+    UTLT_Assert(UpfPDRDeregisterToSessionByID(session, upfPdr.pdrId) == STATUS_OK,
+        return STATUS_ERROR, "UpfPDRDeregisterToSessionByID failed");
+
+    UTLT_Warning("PDR[%u] not in this session, PDR not removed", upfPdr.pdrId);
     return STATUS_ERROR;
 }
 
-Status UpfN4HandleRemoveFar(uint32_t farId) {
-    UTLT_Debug("Handle Remove FAR[%u]", ntohl(farId));
-    UTLT_Assert(ntohl(farId), return STATUS_ERROR,
+Status _ConvertRemoveFARTlvToRule(UpfFAR *upfFar, uint32_t nFARID) {
+    // TODO: Need to Find the FAR stored in UPF
+    upfFar->flags.farId = 1;
+    upfFar->farId = ntohl(nFARID);
+
+    return STATUS_OK;
+}
+
+Status UpfN4HandleRemoveFar(UpfSession *session, uint32_t nFARID) {
+    uint32_t farID = ntohl(nFARID);
+
+    UTLT_Debug("Handle Remove FAR[%u]", farID);
+    UTLT_Assert(farID, return STATUS_ERROR,
                 "farId should not be 0");
 
-    // TODO: here can be speedup like
-    //UpfPdr *pdr = GtpTunnelFindPdrByFarId(gtp5g_int_name, farId);
-    //if (pdr) {
-    //    gtp5g_pdr_set_far_id(pdr, 0);
-    //}
-    //Status status = GtpTunnelDelFar(gtp5g_int_name, farId);
-    //UTLT_Assert(status == STATUS_OK, return STATUS_ERROR,
-    //            "FAR delete error");
+    UpfFAR upfFar;
+    memset(&upfFar, 0, sizeof(UpfFAR));
 
-    Gtpv1TunDevNode *gtpv1Dev4 =
-        (Gtpv1TunDevNode*)ListFirst(&Self()->gtpv1DevList);
-    UTLT_Assert(gtpv1Dev4, return STATUS_ERROR, "No GTP Device");
-    char *gtpIfName = gtpv1Dev4->ifname;
-    UpfFar *far = GtpTunnelFindFarById(gtpIfName, farId);
-    UTLT_Assert(far != NULL, return STATUS_ERROR,
-                "Cannot find FAR[%u] by FarId", ntohl(farId));
+    UTLT_Assert(!UpfFARFindByID(farID, &upfFar), return STATUS_ERROR, "FAR ID[%u] does NOT exist in UPF Context", farID);
 
-    // Set FarId to 0 if the PDR has this far
-    int pdrNum = *(int*)gtp5g_far_get_related_pdr_num(far);
-    uint16_t *pdrList = gtp5g_far_get_related_pdr_list(far);
-    for (size_t idx = 0; idx < pdrNum; ++idx) {
-        UpfPdr * tmpPdr = GtpTunnelFindPdrById(gtpIfName, pdrList[idx]);
-        gtp5g_pdr_set_far_id(tmpPdr, 0);
-        _pushPdrToKernel(tmpPdr, _PDR_MOD);
+    UTLT_Assert(_ConvertRemoveFARTlvToRule(&upfFar, nFARID) == STATUS_OK,
+        return STATUS_ERROR, "Convert FAR TLV To Rule is failed");
 
-        gtp5g_pdr_free(tmpPdr);
-        UTLT_Assert(tmpPdr != NULL, continue,
-                    "Free pdr error");
-    }
-    // FIXME: free pdrList
+    // Using UPDK API
+    UTLT_Assert(Gtpv1TunnelRemoveFAR(&upfFar) == 0, return STATUS_ERROR,
+        "Gtpv1TunnelRemovefar failed");
 
-    Status status = _pushFarToKernel(far, _FAR_DEL);
-    UTLT_Assert(status == STATUS_OK, return STATUS_ERROR,
-                "FAR not pushed to kernel");
-    gtp5g_far_free(far);
-    UTLT_Assert(far != NULL, return STATUS_ERROR,
-                "Free FAR error");
+    // Deregister FAR to Session
+    UTLT_Assert(UpfFARDeregisterToSessionByID(session, upfFar.farId) == STATUS_OK,
+        return STATUS_ERROR, "UpfFARDeregisterToSessionByID failed");
 
     return STATUS_OK;
 }
@@ -632,20 +836,30 @@ Status UpfN4HandleSessionEstablishmentRequest(UpfSession *session, PfcpXact *pfc
     //UTLT_Assert(pfcpXact->gtpXact, return,
     // "GTP Xact of pfcpXact error");
 
-    /* First FAR */
     if (request->createFAR[0].presence) {
-        status = UpfN4HandleCreateFar(&request->createFAR[0]);
+        status = UpfN4HandleCreateFar(session, &request->createFAR[0]);
         // TODO: if error, which cause, and pull out the rule from kernel that
         // has been set, maybe need to pull out session as well
         UTLT_Assert(status == STATUS_OK, cause = PFCP_CAUSE_REQUEST_REJECTED,
                     "Create FAR error");
     }
-    if (request->createFAR[1].presence) {
-        status = UpfN4HandleCreateFar(&request->createFAR[1]);
+    if (request->createPDR[1].presence) {
+        status = UpfN4HandleCreateFar(session, &request->createFAR[1]);
         UTLT_Assert(status == STATUS_OK, cause = PFCP_CAUSE_REQUEST_REJECTED,
                     "Create FAR error");
     }
-    /* Then PDR (order is important) */
+    
+    if (request->createURR.presence) {
+        // TODO
+    }
+    if (request->createBAR.presence) {
+        // TODO
+    }
+    if (request->createQER.presence) {
+        // TODO
+    }
+
+    // The order of PDF should be the lastest
     if (request->createPDR[0].presence) {
         status = UpfN4HandleCreatePdr(session, &request->createPDR[0]);
         UTLT_Assert(status == STATUS_OK, cause = PFCP_CAUSE_REQUEST_REJECTED,
@@ -655,15 +869,6 @@ Status UpfN4HandleSessionEstablishmentRequest(UpfSession *session, PfcpXact *pfc
         status = UpfN4HandleCreatePdr(session, &request->createPDR[1]);
         UTLT_Assert(status == STATUS_OK, cause = PFCP_CAUSE_REQUEST_REJECTED,
                     "Create PDR 2 Error");
-    }
-    if (request->createURR.presence) {
-        // TODO
-    }
-    if (request->createBAR.presence) {
-        // TODO
-    }
-    if (request->createQER.presence) {
-        // TODO
     }
 
     PfcpHeader header;
@@ -711,15 +916,17 @@ Status UpfN4HandleSessionModificationRequest(UpfSession *session, PfcpXact *xact
 
     /* Create FAR */
     if (request->createFAR[0].presence) {
-        status = UpfN4HandleCreateFar(&request->createFAR[0]);
+        status = UpfN4HandleCreateFar(session, &request->createFAR[0]);
         UTLT_Assert(status == STATUS_OK, return STATUS_ERROR,
                     "Modification: Create FAR error");
     }
     if (request->createFAR[1].presence) {
-        status = UpfN4HandleCreateFar(&request->createFAR[1]);
+        status = UpfN4HandleCreateFar(session, &request->createFAR[1]);
         UTLT_Assert(status == STATUS_OK, return STATUS_ERROR,
                     "Modification: Create FAR2 error");
     }
+
+    // The order of PDF should be the lastest
     /* Create PDR */
     if (request->createPDR[0].presence) {
         status = UpfN4HandleCreatePdr(session, &request->createPDR[0]);
@@ -736,19 +943,32 @@ Status UpfN4HandleSessionModificationRequest(UpfSession *session, PfcpXact *xact
     if (request->updateFAR.presence) {
         UTLT_Assert(request->updateFAR.fARID.presence == 1, ,
                     "[PFCP] FarId in updateFAR not presence");
-        status = UpfN4HandleUpdateFar(&request->updateFAR);
+        status = UpfN4HandleUpdateFar(session, &request->updateFAR);
         UTLT_Assert(status == STATUS_OK, return STATUS_ERROR,
                     "Modification: Update FAR error");
     }
+
+    // The order of PDF should be the lastest
     /* Update PDR */
     if (request->updatePDR.presence) {
         UTLT_Assert(request->updatePDR.pDRID.presence == 1, ,
                     "[PFCP] PdrId in updatePDR not presence!");
-        status = UpfN4HandleUpdatePdr(&request->updatePDR);
+        status = UpfN4HandleUpdatePdr(session, &request->updatePDR);
         UTLT_Assert(status == STATUS_OK, return STATUS_ERROR,
                     "Modification: Update PDR error");
     }
 
+    /* Remove FAR */
+    if (request->removeFAR.presence) {
+        UTLT_Assert(request->removeFAR.fARID.presence == 1, ,
+                    "[PFCP] FarId in removeFAR not presence");
+        status = UpfN4HandleRemoveFar(session, *(uint32_t*)
+                                      request->removeFAR.fARID.value);
+        UTLT_Assert(status == STATUS_OK, return STATUS_ERROR,
+                    "Modification: Remove FAR error");
+    }
+
+    // The order of PDF should be the lastest
     /* Remove PDR */
     if (request->removePDR.presence) {
         UTLT_Assert(request->removePDR.pDRID.presence == 1, ,
@@ -757,15 +977,6 @@ Status UpfN4HandleSessionModificationRequest(UpfSession *session, PfcpXact *xact
                                       request->removePDR.pDRID.value);
         UTLT_Assert(status == STATUS_OK, return STATUS_ERROR,
                     "Modification: Remove PDR error");
-    }
-    /* Remove FAR */
-    if (request->removeFAR.presence) {
-        UTLT_Assert(request->removeFAR.fARID.presence == 1, ,
-                    "[PFCP] FarId in removeFAR not presence");
-        status = UpfN4HandleRemoveFar(*(uint32_t*)
-                                      request->removeFAR.fARID.value);
-        UTLT_Assert(status == STATUS_OK, return STATUS_ERROR,
-                    "Modification: Remove FAR error");
     }
 
     /* Send Session Modification Response */
@@ -799,40 +1010,9 @@ Status UpfN4HandleSessionDeletionRequest(UpfSession *session, PfcpXact *xact,
     PfcpHeader header;
     Bufblk *bufBlk = NULL;
 
-    // Remove all PDR and FAR
-    // PDR will not overlap between session so just remove it
-    Gtpv1TunDevNode *gtpv1Dev4 =
-        (Gtpv1TunDevNode*)ListFirst(&Self()->gtpv1DevList);
-    char *ifname = gtpv1Dev4->ifname;
-
-    UTLT_Assert(gtpv1Dev4, return STATUS_ERROR, "No GTP Device");
-    uint16_t pdrId;
-    UpfPdrId *pdrIdPtr;
-    // Always get first one because the first one before have been deleted
-    while((pdrIdPtr = ListFirst(&session->pdrIdList))) {
-        pdrId = pdrIdPtr->pdrId;
-        // Remove PDR before far, but save farId first
-        UpfPdr *tmpPdr = GtpTunnelFindPdrById(ifname, pdrId);
-        uint32_t farId = *gtp5g_pdr_get_far_id(tmpPdr);
-
-        status = GtpTunnelDelPdr(gtpv1Dev4->ifname, pdrId);
-        UTLT_Assert(status == STATUS_OK, return STATUS_ERROR,
-                    "Remove PDR[%u] error", pdrId);
-        gtp5g_pdr_free(tmpPdr);
-
-        // Remove FAR
-        status = GtpTunnelDelFar(ifname, farId);
-        if (status != STATUS_OK) {
-            // status not important
-            UTLT_Debug("Remove FAR[%u] error, "
-                       "but it may be n PDR point to same FAR", farId);
-        }
-        ListRemove(&session->pdrIdList, pdrIdPtr);
-        UpfPdrIdRemove(pdrIdPtr);
-    }
-
     /* delete session */
-    UpfSessionRemove(session);
+    UTLT_Assert(UpfSessionRemove(session) == STATUS_OK, return STATUS_ERROR,
+        "UpfSessionRemove failed");
 
     /* Send Session Deletion Response */
     memset(&header, 0, sizeof(PfcpHeader));

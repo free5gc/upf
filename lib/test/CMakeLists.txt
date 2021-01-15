@@ -32,7 +32,6 @@ target_link_libraries(testutlt free5GC_utlt logger yaml ${PROJECT_NAME})
 target_include_directories(testutlt PRIVATE
     include
     ${LOGGER_DST}
-    "${LIBGTP5GNL_DST}/include"
     "${CMAKE_SOURCE_DIR}/lib/utlt/include"
 )
 #target_compile_options(${PROJECT_NAME} PRIVATE -g -ggdb -Wall -Werror)

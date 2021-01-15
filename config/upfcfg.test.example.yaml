@@ -5,6 +5,8 @@ info:
 configuration:
   # debugLevel: panic|fatal|error|warn|info|debug|trace
   debugLevel: info
+  # ReportCaller: true|false
+  ReportCaller: false
 
   pfcp:
     - addr: 10.200.200.101
@@ -16,8 +18,8 @@ configuration:
     # [optional] gtpu.ifname
     # - ifname: gtpif
 
-  apn_list:
-    - apn: internet
+  dnn_list:
+    - dnn: internet
       cidr: 60.60.0.0/24
-      # [optional] apn_list[*].natifname
+      # [optional] dnn_list[*].natifname
       # natifname: eth0

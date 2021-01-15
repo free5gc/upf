@@ -13,7 +13,7 @@ Status TestInit() {
     testSelf.totalCase = 0;
     testSelf.finishCase = 0;
     
-    ListInit(&testSelf.node);
+    ListHeadInit(&testSelf.node);
 
     return STATUS_OK;
 }
@@ -21,7 +21,7 @@ Status TestInit() {
 Status TestTerminate() {
 
     for (TestNode *it = ListFirst(&testSelf.node); it != NULL; it = ListNext(it)) {
-        ListRemove(&testSelf.node, it);
+        ListRemove(it);
         free(it);
     }
 
@@ -37,7 +37,7 @@ Status TestAdd(TestCase *testCase) {
     TestNode *newNode = malloc(sizeof(TestNode));
     memcpy(&newNode->test, testCase, sizeof(TestCase));
 
-    ListAppend(&testSelf.node, newNode);
+    ListInsert(newNode, &testSelf.node);
     testSelf.totalCase += 1;
 
     return STATUS_OK;
@@ -56,7 +56,8 @@ Status TestAddList(TestCase *testList, int size) {
 
 Status TestRun() {
     Status status;
-    for (TestNode *it = ListFirst(&testSelf.node); it != NULL; it = ListNext(it)) {
+    TestNode *it, *nextIt = NULL;
+    ListForEachSafe(it, nextIt, &testSelf.node) {
         printf("[%d/%d][%s] : ", ++testSelf.finishCase, testSelf.totalCase, it->test.name);
         fflush(stdout);
 

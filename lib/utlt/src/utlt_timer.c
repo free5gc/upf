@@ -6,10 +6,10 @@
 #include "utlt_debug.h"
 #include "utlt_pool.h"
 
-static int TimerCmpFunc(ListNode *pnode1, ListNode *pnode2);
+static int TimerCmpFunc(ListHead *pnode1, ListHead *pnode2);
 
 typedef struct _TimerBlk {
-    ListNode        node;
+    ListHead        node;
     TimerList       *timerList;
     
     int             type;
@@ -23,7 +23,7 @@ typedef struct _TimerBlk {
 
 PoolDeclare(timerPool, TimerBlk, MAX_NUM_OF_TIMER);
 
-static int TimerCmpFunc(ListNode *pnode1, ListNode *pnode2) {
+static int TimerCmpFunc(ListHead *pnode1, ListHead *pnode2) {
     TimerBlk *tm1 = (TimerBlk *)pnode1;
     TimerBlk *tm2 = (TimerBlk *)pnode2;
 
@@ -54,8 +54,8 @@ uint32_t TimerGetPoolSize() {
 
 void TimerListInit(TimerList *tmList) {
     memset(tmList, 0x00, sizeof(TimerList));
-    ListInit(&tmList->active);
-    ListInit(&tmList->idle);
+    ListHeadInit(&tmList->active);
+    ListHeadInit(&tmList->idle);
     return;
 }
 
@@ -64,19 +64,19 @@ Status TimerExpireCheck(TimerList *tmList, uintptr_t data) {
     uint32_t curTime = TimeMsec(TimeNow());
     TimerBlk *tm = ListFirst(&(tmList->active));
 
-    while (tm) {
+    while (tm != (TimerBlk *)&tmList->active) {
         if (tm->expireTime < curTime) {
             tm->expireFunc(data, tm->param);
             
             if (tm->isRunning) {
-                ListRemove(&(tmList->active), tm);
+                ListRemove(tm);
 
                 if (tm->type == TIMER_TYPE_PERIOD) {
                     tm->expireTime = curTime + tm->duration;
                     
-                    ListInsertSorted(&(tmList->active), tm, TimerCmpFunc);
+                    ListInsertSorted(tm, &(tmList->active), TimerCmpFunc);
                 } else {
-                    ListInsertSorted(&(tmList->idle), tm, TimerCmpFunc);
+                    ListInsertSorted(tm, &(tmList->idle), TimerCmpFunc);
                     
                     tm->isRunning = 0;
                 }
@@ -93,14 +93,11 @@ Status TimerStart(TimerBlkID id) {
     uint32_t curTime = TimeMsec(TimeNow());
     TimerBlk *tm = (TimerBlk *)id;
 
-    if (tm->isRunning)
-        ListRemove(&(tm->timerList->active), tm);
-    else
-        ListRemove(&(tm->timerList->idle), tm);
+     ListRemove(tm);
 
     tm->expireTime = curTime + tm->duration;
 
-    ListInsertSorted(&(tm->timerList->active), tm, TimerCmpFunc);
+    ListInsertSorted(tm, &(tm->timerList->active), TimerCmpFunc);
     
     tm->isRunning = 1;
 
@@ -111,8 +108,9 @@ Status TimerStop(TimerBlkID id) {
     TimerBlk *tm = (TimerBlk *)id;
 
     if (tm->isRunning) {
-        ListRemove(&(tm->timerList->active), tm);
-        ListInsertSorted(&(tm->timerList->idle), tm, TimerCmpFunc);
+        ListRemove(tm);
+
+        ListInsertSorted(tm, &(tm->timerList->idle), TimerCmpFunc);
 
         tm->isRunning = 0;
     }
@@ -130,7 +128,7 @@ TimerBlkID TimerCreate(TimerList *tmList, int type, uint32_t duration, ExpireFun
 
     tm->timerList = tmList;
 
-    ListInsertSorted(&(tm->timerList->idle), tm, TimerCmpFunc);
+    ListInsertSorted(tm, &(tm->timerList->idle), TimerCmpFunc);
 
     tm->type = type;
     tm->duration = duration;
@@ -142,13 +140,9 @@ TimerBlkID TimerCreate(TimerList *tmList, int type, uint32_t duration, ExpireFun
 void TimerDelete(TimerBlkID id) {
     TimerBlk *tm = (TimerBlk *)id;
 
-    if (tm->isRunning)
-        ListRemove(&(tm->timerList->active), tm);
-    else
-        ListRemove(&(tm->timerList->idle), tm);
-
+    ListRemove(tm);
     PoolFree(&timerPool, tm);
-
+    
     return;
 }
 

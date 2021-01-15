@@ -225,7 +225,7 @@ typedef struct _PfcpUserPlaneIpResourceInformation {
         struct in_addr      addr4;
         //struct in6_addr     addr6;
     //};
-    uint8_t             networkInstance[MAX_APN_LEN+1];
+    uint8_t             networkInstance[MAX_DNN_LEN+1];
     ENDIAN2(uint8_t       spare1:4;,
             uint8_t       sourceInterface:4;)
 } __attribute__ ((packed)) PfcpUserPlaneIpResourceInformation;

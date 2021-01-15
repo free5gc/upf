@@ -3,13 +3,16 @@ cmake_minimum_required(VERSION 3.5)
 
 project(free5GC_UPF C)
 
+# User build options
+# UPDK_PKTPROC_MODULE: packet processing module used by UPDK
+#  - either: "kernel" | ...
+set(UPDK_PKTPROC_MODULE "kernel")
+
 # Build destination
 set(BUILD_BIN_DIR "${CMAKE_BINARY_DIR}/bin")
 set(BUILD_CONFIG_DIR "${CMAKE_BINARY_DIR}/config")
 
 # Build paths
-set(LIBGTP5GNL_SRC "${CMAKE_SOURCE_DIR}/lib/libgtp5gnl")
-set(LIBGTP5GNL_DST "${CMAKE_BINARY_DIR}/libgtp5gnl")
 set(LOGGER_SRC "${CMAKE_SOURCE_DIR}/lib/utlt/logger")
 set(LOGGER_DST "${CMAKE_BINARY_DIR}/utlt_logger")
 
@@ -35,9 +38,7 @@ set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -g3 -O0")
 
 # Submodules
 add_subdirectory(src)
-add_subdirectory(test)
-add_subdirectory(lib/gtpv1)
-add_subdirectory(lib/knet)
+add_subdirectory(updk)
 add_subdirectory(lib/pfcp)
 add_subdirectory(lib/pfcp/test)
 add_subdirectory(lib/utlt)

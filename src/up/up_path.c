@@ -15,55 +15,9 @@
 #include "utlt_buff.h"
 #include "pfcp_types.h"
 #include "upf_context.h"
-#include "knet_route.h"
-#include "gtp_path.h"
-#include "gtp_header.h"
-#include "gtp_buffer.h"
-#include "gtp_tunnel.h"
-#include "libgtp5gnl/gtp5g.h"
+#include "utlt_netheader.h"
 
-Status UpRouteInit() {
-    Status status;
-
-    for (ApnNode *it = ListFirst(&Self()->apnList); it != NULL; it = ListNext(it)) {
-        // TODO: only get the first dev here, there will be only one gtp tun dev in the future
-        Gtpv1TunDevNode *gtpTunDev = ListFirst(&Self()->gtpv1DevList);
-
-        status = KnetAddRoute(gtpTunDev->ifname, it->subnetIP, it->subnetPrefix, NULL, 0);
-        UTLT_Assert(status == STATUS_OK, return STATUS_ERROR, "");
-    }
-
-    // Get routes from main IPv4 routing table and print
-    ListNode *routeEntries = KnetGetRoutes(AF_INET, RT_TABLE_MAIN);
-    UTLT_Assert(routeEntries, return STATUS_ERROR, "");
-
-    UTLT_Info("APN routes added, main routing table:");
-    KnetPrintRoutes(routeEntries);
-    KnetRtListFree(routeEntries);
-
-    UTLT_Free(routeEntries);
-
-    return STATUS_OK;
-}
-
-Status UpRouteTerminate() {
-    Status status;
-
-    UTLT_Info("Removing APN routes");
-    for (ApnNode *it = ListFirst(&Self()->apnList); it != NULL;
-         it = ListNext(it)) {
-        // TODO: only get the first dev here, there will be only one gtp tun
-        // dev in the future
-        Gtpv1TunDevNode *gtpTunDev = ListFirst(&Self()->gtpv1DevList);
-
-        status = KnetDelRoute(gtpTunDev->ifname, it->subnetIP,
-                              it->subnetPrefix, NULL, 0);
-        UTLT_Assert(status == STATUS_OK, return STATUS_ERROR, "");
-    }
-
-    return STATUS_OK;
-}
-
+/* TODO: It is not use gtpv1DevList in upf_context, need to change to VirtualDevice
 Status GTPv1ServerInit() {
     Status status;
 
@@ -86,7 +40,6 @@ Status GTPv1ServerTerminate() {
     return status;
 }
 
-// TODO : Need to handle buffer and drop (Rule will be set at far)
 Status GtpHandler(Sock *sock, void *data) {
     UTLT_Assert(sock, return STATUS_ERROR, "GTP socket not found");
     Status status = STATUS_ERROR;
@@ -102,21 +55,25 @@ Status GtpHandler(Sock *sock, void *data) {
                 "Only handle the GTP version 1 in user plane");
 
     switch (gtpHdr->type) {
-        case GTPV1_ECHO_REQUEST :
+        case GTPV1_ECHO_REQUEST:
             status = GtpHandleEchoRequest(sock, gtpHdr);
             break;
-        case GTPV1_ECHO_RESPONSE :
+        case GTPV1_ECHO_RESPONSE:
             status = GtpHandleEchoResponse(gtpHdr);
             break;
-        case GTPV1_ERROR_INDICATION :
-
+        case GTPV1_ERROR_INDICATION:
+            UTLT_Warning("GTPv1 header type ERROR_INDICATION not implemented");
             break;
-        case GTPV1_END_MARK :
+        case GTPV1_END_MARK:
             // TODO : Need to deal with the UE packet that does not have tunnel yet
             status = GtpHandleEndMark(sock, gtpHdr);
             break;
+        case GTPV1_T_PDU:
+            UTLT_Debug("Got GTPv1 T_PDU packet");
+            status = STATUS_OK;
+            break;
         default :
-            UTLT_Warning("This type[%d] of GTPv1 header does not implement yet", gtpHdr->type);
+            UTLT_Warning("Unknown GTPv1 header type[%d]", gtpHdr->type);
     }
 
 FREEBUFBLK:
@@ -124,6 +81,7 @@ FREEBUFBLK:
 
     return status;
 }
+*/
 
 Status GtpHandleEchoRequest(Sock *sock, void *data) {
     UTLT_Assert(data, return STATUS_ERROR, "GTP data is NULL");
@@ -163,7 +121,7 @@ Status GtpHandleEchoRequest(Sock *sock, void *data) {
 
     BufblkFree(optPkt);
 
-    UTLT_Assert(GtpSend(sock, pkt) == STATUS_OK, status = STATUS_ERROR,
+    UTLT_Assert(UdpSendTo(sock, pkt->buf, pkt->len) == STATUS_OK, status = STATUS_ERROR,
                 "GTP Send fail");
 
     BufblkFree(pkt);
@@ -197,7 +155,7 @@ Status GtpHandleEndMark(Sock *sock, void *data) {
 
     // TODO : Check PDR, FAR to forward packet, or maybe do paging and buffer UE packet
     /*
-    UTLT_Assert(GtpSend(sock, pktbuf) == STATUS_OK, goto FREEBUFBLK, "GTP Send fail");
+    UTLT_Assert(UdpSendTo(sock, pktbuf->buf, pktbuf->len) == STATUS_OK, goto FREEBUFBLK, "GTP Send fail");
 
     status = STATUS_OK;
 
@@ -207,119 +165,26 @@ FREEBUFBLK:
     status = STATUS_OK;
     return status;
 }
-// Create name pipe
-Status BufferServerInit() {
-    Status status = STATUS_OK;
 
-    // HACK: read path from config
-    Self()->buffSock = BufferServerCreate(SOCK_DGRAM, Self()->buffSockPath,
-                                          BufferHandler, NULL);
-    if (&Self()->buffSock == NULL) {
-        UTLT_Error("Buffering PIPE cannot create");
-        return STATUS_ERROR;
-    }
-
-    status = BufferEpollRegister(Self()->epfd, Self()->buffSock);
-    UTLT_Assert(status == STATUS_OK, return status, "epoll register error");
-
-    return status;
-}
-
-// Clear name pipe
-Status BufferServerTerminate() {
-    Status status = STATUS_OK;
-
-    status = BufferEpollDeregister(Self()->epfd, Self()->buffSock);
-    UTLT_Assert(status == STATUS_OK, return status, "epoll deregister error");
-
-    status = BufferServerFree(Self()->buffSock);
-    UTLT_Assert(status == STATUS_OK, return status, "PIPE cannot be free");
-
-    return status;
-}
-
-// Handle when recv a packet from GTP Dev but not matching any rules
-Status BufferHandler(Sock *sock, void *data) {
-    UTLT_Assert(sock, return STATUS_ERROR, "Unix socket not found");
-
-    UTLT_Debug("BufferHandler get event");
-
-    uint8_t farAction;
-    uint16_t pdrId;
-    Bufblk *pktbuf = BufblkAlloc(1, MAX_OF_BUFFER_PACKET_SIZE);
-
-    // BufferRecv return -1 if error
-    int readNum = BufferRecv(sock, pktbuf, &pdrId, &farAction);
-    UTLT_Assert(readNum >= 0, goto ERROR_AND_FREE, "Buffer receive fail");
-
-    if (farAction & PFCP_FAR_APPLY_ACTION_BUFF) {
-        // Store packet in context &Self->bufPacketHash
-        UpfBufPacket *packetStorage = UpfBufPacketFindByPdrId(pdrId);
-        UTLT_Assert(packetStorage, goto ERROR_AND_FREE,
-                    "Cannot find matching PDR ID buffer slot");
-
-        Status status;
-        // protect data write with spinlock
-        // instead of protect code block with mutex
-        UTLT_Assert(!pthread_spin_lock(&Self()->buffLock), goto ERROR_AND_FREE,
-                    "spin lock buffLock error");
-        if (packetStorage->packetBuffer) {
-            // if packetBuffer not null, just add packet followed
-            status = BufblkBuf(packetStorage->packetBuffer, pktbuf);
-            UTLT_Assert(status == STATUS_OK, goto ERROR_AND_FREE,
-                        "block add behand old buffer error");
-            // free the pktbuf
-            UTLT_Assert(BufblkFree(pktbuf) == STATUS_OK, return STATUS_ERROR,
-                        "Bufblk free fail");
-        } else {
-            // if packetBuffer null, allocate space
-            // reuse the pktbuf, so don't free it
-            packetStorage->packetBuffer = pktbuf;
-        }
-        while (pthread_spin_unlock(&Self()->buffLock)) {
-            // if unlock failed, keep trying
-            UTLT_Error("spin unlock error");
-        }
-
-        // If NOCP, Send event to notify SMF
-        uint64_t seid = ((UpfSession*)packetStorage->sessionPtr)->upfSeid;
-        UTLT_Debug("buffer NOCP to SMF: SEID: %u, PDRID: %u", seid, pdrId);
-        status = EventSend(Self()->eventQ, UPF_EVENT_SESSION_REPORT, 2,
-                           seid, pdrId);
-        UTLT_Assert(status == STATUS_OK, ,
-                    "DL data message event send to N4 failed");
-    } else {
-        UTLT_Warning("apply action no BUF tag, drop it");
-        UTLT_Assert(BufblkFree(pktbuf) == STATUS_OK, return STATUS_ERROR,
-                    "Bufblk free fail");
-    }
-
-    // When no jump to ERROR_AND_FREE, it means ok
-    return STATUS_OK;
-
-ERROR_AND_FREE:
-    UTLT_Assert(BufblkFree(pktbuf) == STATUS_OK, , "Bufblk free fail");
-    return STATUS_ERROR;
-}
-
-Status UpSendPacketByPdrFar(UpfPdr *pdr, UpfFar *far, Sock *sock) {
+Status UpSendPacketByPdrFar(UpfPDR *pdr, UpfFAR *far, Sock *sock) {
     UTLT_Assert(pdr, return STATUS_ERROR, "PDR error");
     UTLT_Assert(far, return STATUS_ERROR, "FAR error");
     UTLT_Assert(sock, return STATUS_ERROR, "Send packet sock error");
     Status status = STATUS_OK;
 
-    // if GTP IPV4
-    uint16_t *desPtr = gtp5g_far_get_outer_header_creation_description(far);
-    if (desPtr && (*desPtr & 1)) {
-        uint32_t *teidPtr = gtp5g_far_get_outer_header_creation_teid(far);
-        UTLT_Assert(teidPtr, return STATUS_ERROR, "TEID not found");
+    UTLT_Assert(far->flags.forwardingParameters && far->forwardingParameters.flags.outerHeaderCreation,
+        return STATUS_ERROR, "Need OuterHeaderCreation to send packet");
+
+    UPDK_OuterHeaderCreation *outerHeaderCreation = &far->forwardingParameters.outerHeaderCreation;
+
+    if (outerHeaderCreation->description & UPDK_OUTER_HEADER_CREATION_DESCRIPTION_GTPU_UDP_IPV4) {
         Gtpv1Header gtpHdr = {
             .flags = 0x30,
             .type = GTPV1_T_PDU,
-            ._teid = *teidPtr,
+            ._teid = ntohl(outerHeaderCreation->teid),
         };
 
-        uint16_t pdrId = *gtp5g_pdr_get_id(pdr);
+        uint16_t pdrId = pdr->pdrId;
         UpfBufPacket *bufStorage = UpfBufPacketFindByPdrId(pdrId);
         if (bufStorage->packetBuffer) {
             UTLT_Assert(!pthread_spin_lock(&Self()->buffLock),
@@ -330,8 +195,8 @@ Status UpSendPacketByPdrFar(UpfPdr *pdr, UpfFar *far, Sock *sock) {
             BufblkBytes(sendBuf, (void*)&gtpHdr, GTPV1_HEADER_LEN);
             BufblkBuf(sendBuf, bufStorage->packetBuffer);
 
-            status = GtpSend(sock, sendBuf);
-            UTLT_Assert(status == STATUS_OK, return status, "GtpSend failed");
+            status = UdpSendTo(sock, sendBuf->buf, sendBuf->len);
+            UTLT_Assert(status == STATUS_OK, return status, "UdpSendTo failed");
             BufblkClear(sendBuf);
 
             while (pthread_spin_unlock(&Self()->buffLock)) {

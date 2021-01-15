@@ -65,7 +65,7 @@ extern "C" {
 #define AUTS_LEN                    14
 #define MAX_RES_LEN                 16
 
-#define MAX_APN_LEN                 100
+#define MAX_DNN_LEN                 100
 #define MAX_PCO_LEN                 251
 
 #define MAX_SBI_MESSAGE_LEN         4096
@@ -134,7 +134,7 @@ typedef struct _Qos {
 
 typedef struct _Pdn {
     uint32_t    contextId;
-    uint8_t     apn[MAX_APN_LEN+1];
+    uint8_t     dnn[MAX_DNN_LEN+1];
 #define HSS_PDN_TYPE_IPV4                       0
 #define HSS_PDN_TYPE_IPV6                       1
 #define HSS_PDN_TYPE_IPV4V6                     2

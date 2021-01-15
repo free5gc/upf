@@ -13,6 +13,7 @@ Linux kernel module 5G GTP-U (Linux kernel version = 5.0.0-23-generic)
 ```bash
 git clone https://github.com/PrinzOwO/gtp5g.git
 cd gtp5g
+git checkout develop
 make
 sudo make install
 ```
@@ -36,8 +37,18 @@ After building from sources, edit `./build/config/upfcfg.yaml`
 
 ### Setup environment
 ```bash
-sh -c 'echo 1 > /proc/sys/net/ipv4/ip_forward'
-iptables -t nat -A POSTROUTING -o {DN_Interface_Name} -j MASQUERADE
+# (Must) IPv4 forwarding
+sudo sysctl -a | grep forward        # check sys rule
+sudo sysctl -w net.ipv4.ip_forward=1
+
+# (Recommend) Forwarding chain in iptables can forward packet
+sudo iptables -A FORWARD -j ACCEPT
+
+# (Recommend) Close ubuntu firewall
+sudo systemctl stop ufw
+
+# (Optional) Using NAT for UE to access data network
+iptables -t nat -A POSTROUTING -o <DN_Interface_Name> -j MASQUERADE
 ```
 
 ### Run
@@ -55,8 +66,7 @@ ls /dev/mqueue/
 rm /dev/mqueue/*
 ```
 
-### Remove gtp devices (using tools in libgtp5gnl)
+### Remove gtp devices
 ```bash
-cd lib/libgtp5gnl/tools
-sudo ./gtp5g-link del {Dev-Name}
+sudo ip l del upfgtp
 ```

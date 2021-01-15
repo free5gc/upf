@@ -11,6 +11,8 @@
 // TODO : Need to use buffer written by ourself
 #define MAX_SIZE_OF_BUFFER 32768
 
+unsigned int reportCaller = 0;
+
 Status UTLT_SetLogLevel(const char *level) {
     if (UpfUtilLog_SetLogLevel(UTLT_CStr2GoStr(level)))
         return STATUS_OK;
@@ -18,20 +20,24 @@ Status UTLT_SetLogLevel(const char *level) {
         return STATUS_ERROR;
 }
 
+Status UTLT_SetReportCaller(unsigned int flag) {
+    if (reportCaller >= REPORTCALLER_MAX) {
+        reportCaller = 0;
+        return STATUS_ERROR;
+    }
+
+    reportCaller = flag;
+    return STATUS_OK;
+}
+
 int UTLT_LogPrint(int level, const char *filename, const int line, 
                   const char *funcname, const char *fmt, ...) {
     static char buffer[MAX_SIZE_OF_BUFFER];
 
     unsigned int cnt, vspCnt;
-    cnt = sprintf(buffer, "%s:%d %s() ", filename, line, funcname);
-    if (cnt < 0) {
-        fprintf(stderr, "sprintf in UTLT_LogPrint error : %s\n", strerror(errno));
-        return STATUS_ERROR;
-    }
-
     va_list vl;
     va_start(vl, fmt);
-    vspCnt = vsnprintf(buffer + cnt, sizeof(buffer) - cnt, fmt, vl);
+    vspCnt = vsnprintf(buffer, sizeof(buffer), fmt, vl);
     if (vspCnt < 0) {
         fprintf(stderr, "vsnprintf in UTLT_LogPrint error : %s\n", strerror(errno));
         va_end(vl);
@@ -40,6 +46,14 @@ int UTLT_LogPrint(int level, const char *filename, const int line,
         return STATUS_OK;
     }
     va_end(vl);
+
+    if (reportCaller == REPORTCALLER_TRUE) {
+        cnt = snprintf(buffer + vspCnt, sizeof(buffer) - vspCnt, " (%s:%d %s)", filename, line, funcname);
+        if (cnt < 0) {
+            fprintf(stderr, "sprintf in UTLT_LogPrint error : %s\n", strerror(errno));
+            return STATUS_ERROR;
+        }
+    }
 
     switch(level) {
         case 0 :

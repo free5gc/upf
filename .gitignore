@@ -13,7 +13,7 @@ lib/utlt/logger/logger.h
 lib/test/test
 lib/test/src/*
 !lib/test/src/*.c
-lib/gtpv1/test
+updk/src/kernel/gtpv1/test
 
 # All of bin directory
 **/bin/
