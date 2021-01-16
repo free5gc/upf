@@ -3,6 +3,7 @@
 
 #include "updk/rule_pdr.h"
 #include "updk/rule_far.h"
+#include "updk/rule_qer.h"
 
 /*
  * These functions shall be customized by kinds of device.
@@ -58,12 +59,31 @@ int Gtpv1TunnelUpdateFAR(UPDK_FAR *far);
  */
 int Gtpv1TunnelRemoveFAR(UPDK_FAR *far);
 
+/**
+ * Gtpv1TunnelCreateQER - UPF receive CreateQER in PFCP and it will call this function
+ * 
+ * @qer: UPDK_QER pointer in updk
+ * @return: 0 or -1 if one of part is failed
+ */
+int Gtpv1TunnelCreateQER(UPDK_QER *qer);
+
+/**
+ * Gtpv1TunnelUpdateQER - UPF receive UpdateQER in PFCP and it will call this function
+ * 
+ * @qer: UPDK_QER pointer in updk
+ * @return: 0 or -1 if one of part is failed
+ */
+int Gtpv1TunnelUpdateQER(UPDK_QER *qer);
+
+/**
+ * Gtpv1TunnelRemoveQER - UPF receive RemoveQER in PFCP and it will call this function
+ * 
+ * @qer: UPDK_QER pointer in updk
+ * @return: 0 or -1 if one of part is failed
+ */
+int Gtpv1TunnelRemoveQER(UPDK_QER *qer);
 
 /* TODO: Our UPF do not handle these yet.
-int Gtpv1TunnelCreateQER(CreateQER *createQer);
-int Gtpv1TunnelUpdateQER(UpdateQER *updateQer);
-int Gtpv1TunnelRemoveQER(RemoveQER *removeQer);
-
 int Gtpv1TunnelCreateBAR(CreateBAR *createBar);
 // int Gtpv1TunnelUpdateBAR(UpdateBAR *updateBar); // TODO: struct name shall be alias
 int Gtpv1TunnelRemoveBAR(RemoveBAR *removeBar);

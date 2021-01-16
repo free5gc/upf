@@ -396,9 +396,9 @@ void gtp5g_pdr_set_sdf_filter_description(struct gtp5g_pdr *pdr, const char *rul
 
     char reg_act[] = "(permit)";
     char reg_direction[] = "(in|out)";
-    char reg_proto[] = "(ip|[0-9]{1,3}})";
-    char reg_src_ip_mask[] = "(any|assigned|[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}(/[0-9]{1,5})?)";
-    char reg_dest_ip_mask[] = "(any|assigned|[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}(/[0-9]{1,5})?)";
+    char reg_proto[] = "(ip|[0-9]{1,3})";
+    char reg_src_ip_mask[] = "(any|assigned|[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}(/[0-9]{1,2})?)";
+    char reg_dest_ip_mask[] = "(any|assigned|[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}(/[0-9]{1,2})?)";
     char reg_port[] = "([ ][0-9]{1,5}([,-][0-9]{1,5})*)?";
 
     char reg[0xfff];

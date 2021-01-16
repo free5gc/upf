@@ -4,6 +4,7 @@
 
 #include <string.h>
 #include <stdlib.h>
+#include <endian.h>
 #include <arpa/inet.h>
 #include <pthread.h>
 #include <netinet/in.h>
@@ -27,6 +28,7 @@
 #include "updk/rule.h"
 #include "updk/rule_pdr.h"
 #include "updk/rule_far.h"
+#include "updk/rule_qer.h"
 
 #define MAX_NUM_OF_SUBNET       16
 
@@ -96,10 +98,11 @@ Status UpfContextInit() {
     self.envParams->virtualDevice->eventCB.PacketInGTPU = PacketInWithGTPU;
     self.envParams->virtualDevice->eventCB.getPDR = UpfPDRFindByID;
     self.envParams->virtualDevice->eventCB.getFAR = UpfFARFindByID;
+    self.envParams->virtualDevice->eventCB.getQER = UpfQERFindByID;
 
     self.upSock.fd = -1;
     SockSetEpollMode(&self.upSock, EPOLLIN);
-    
+
 
     // TODO : Add PFCP init here
     ListHeadInit(&self.pfcpIPList);
@@ -200,6 +203,7 @@ Status UpfContextTerminate() {
 Upf##__ruleType##Node *Upf##__ruleType##NodeAlloc() { \
     Upf##__ruleType##Node *node = NULL; \
     IndexAlloc(&upf##__ruleType##NodePool, node); \
+    ListHeadInit(&node->node); \
     return node; \
 }
 
@@ -238,8 +242,8 @@ int Upf##__ruleType##FindByID(__keyType id, void *ruleBuf) { \
 
 RuleFindByID(PDR, pdr, uint16_t);
 RuleFindByID(FAR, far, uint32_t);
-/* TODO: Not support yet
 RuleFindByID(QER, qer, uint32_t);
+/* TODO: Not support yet
 RuleFindByID(BAR, bar, uint32_t);
 RuleFindByID(URR, urr, uint32_t);
 */
@@ -268,8 +272,8 @@ void Upf##__ruleType##Dump() { \
 
 RuleDump(PDR, pdr, uint16_t);
 RuleDump(FAR, far, uint32_t);
-/*
 RuleDump(QER, qer, uint32_t);
+/* TODO: Not support yet
 RuleDump(BAR, bar, uint32_t);
 RuleDump(URR, urr, uint32_t);
 */
@@ -290,9 +294,9 @@ UpfPDRNode *UpfPDRRegisterToSession(UpfSession *sess, UpfPDR *rule) {
             ruleNode = UpfPDRNodeAlloc();
             UTLT_Assert(ruleNode, goto FREEMATCHRULENODE, "UpfPDENodeAlloc failed");
 
-            ListHeadInit(&ruleNode->node);
             ListInsert(ruleNode, &sess->pdrList);
         } else {
+            MatchRuleDeregister(ruleNode->matchRule);
             MatchRuleNodeFree(ruleNode->matchRule);
         }
         memcpy(&ruleNode->pdr, rule, sizeof(UpfPDR));
@@ -320,7 +324,6 @@ Upf##__ruleType##Node *Upf##__ruleType##RegisterToSession(UpfSession *sess, Upf#
         if (!ruleNode) { \
             ruleNode = Upf##__ruleType##NodeAlloc(); \
             UTLT_Assert(ruleNode, return NULL, "Upf"#__ruleType"NodeAlloc failed"); \
-            ListHeadInit(&ruleNode->node); \
             ListInsert(ruleNode, &sess->__ruleName##List); \
         } \
         memcpy(&ruleNode->__ruleName, rule, sizeof(Upf##__ruleType)); \
@@ -330,8 +333,8 @@ Upf##__ruleType##Node *Upf##__ruleType##RegisterToSession(UpfSession *sess, Upf#
 }
 
 RuleRegisterToSession(FAR, far);
-/* TODO: Not support yet
 RuleRegisterToSession(QER, qer);
+/* TODO: Not support yet
 RuleRegisterToSession(BAR, bar);
 RuleRegisterToSession(URR, urr);
 */
@@ -342,6 +345,23 @@ RuleRegisterToSession(URR, urr);
     ListRemove(__nodePtr); \
 } while (0)
 
+
+static void UpfPDRDeregisterToSessionByNodeNoSafe(UpfSession *sess, UpfPDRNode *ruleNode) {
+    if (ruleNode->matchRule) {
+        MatchRuleDeregister(ruleNode->matchRule);
+        MatchRuleNodeFree(ruleNode->matchRule);
+    }
+
+    RuleDeletionFromSession(PDR, pdr, sess, ruleNode);
+    UpfPDRNodeFree(ruleNode);
+}
+
+static void UpfPDRDeregisterToSessionByNode(UpfSession *sess, UpfPDRNode *ruleNode) {
+    PDR_Thread_Safe(
+        UpfPDRDeregisterToSessionByNodeNoSafe(sess, ruleNode);
+    );
+}
+
 Status UpfPDRDeregisterToSessionByID(UpfSession *sess, uint16_t id) {
     UTLT_Assert(sess, return STATUS_ERROR, "Session should not be NULL");
 
@@ -349,15 +369,8 @@ Status UpfPDRDeregisterToSessionByID(UpfSession *sess, uint16_t id) {
         UpfPDRNode *ruleNode = RuleNodeHashGet(PDR, id);
         UTLT_Assert(ruleNode, return STATUS_ERROR, "PDR ID[%u] does NOT exist", id);
 
-        if (ruleNode->matchRule) {
-            MatchRuleDeregister(ruleNode->matchRule);
-            MatchRuleNodeFree(ruleNode->matchRule);
-        }
-
-        RuleDeletionFromSession(PDR, pdr, sess, ruleNode);
+        UpfPDRDeregisterToSessionByNodeNoSafe(sess, ruleNode);
     );
-
-    UpfPDRNodeFree(ruleNode);
 
     return STATUS_OK;
 }
@@ -375,28 +388,50 @@ Status Upf##__ruleType##DeregisterToSessionByID(UpfSession *sess, __keyType id) 
 }
 
 RuleDeregisterToSessionByID(FAR, far, uint32_t);
-/*
 RuleDeregisterToSessionByID(QER, qer, uint32_t);
+/* TODO: Not support yet
 RuleDeregisterToSessionByID(BAR, bar, uint32_t);
 RuleDeregisterToSessionByID(URR, urr, uint32_t);
 */
 
 #define UPF_RULE_LIST(__ruleName) __ruleName ## List
 
+void UpfPDRListDeletionAndFreeWithGTPv1Tunnel(UpfSession *sess) {
+    UpfPDRNode *ruleNode;
+    UpfPDRNode *nextNode;
+    ruleNode = ListFirst(&(sess)->pdrList);
+    while (ruleNode != (UpfPDRNode *) &(sess)->pdrList) {
+        nextNode = (UpfPDRNode *) ListNext(ruleNode);
+        UTLT_Assert(!Gtpv1TunnelRemovePDR(&ruleNode->pdr), ,
+            "Remove PDR[%u] failed", ruleNode->pdr.pdrId);
+
+        UpfPDRDeregisterToSessionByNode(sess, ruleNode);
+        ruleNode = nextNode;
+    }
+}
+
 // Do the thread safe to upper layer function
-#define RuleListDeletionAndFreeWithGTPv1Tunnel(__ruleType, __ruleName, __sessionPtr) do { \
+#define RuleListDeletionAndFreeWithGTPv1Tunnel(__ruleType, __ruleName) \
+void Upf##__ruleType##ListDeletionAndFreeWithGTPv1Tunnel(UpfSession *sess) { \
     Upf##__ruleType##Node *ruleNode; \
     Upf##__ruleType##Node *nextNode; \
-    ruleNode = ListFirst(&(__sessionPtr)->UPF_RULE_LIST(__ruleName)); \
-    while (ruleNode != (Upf##__ruleType##Node *) &(__sessionPtr)->UPF_RULE_LIST(__ruleName)) { \
+    ruleNode = ListFirst(&(sess)->UPF_RULE_LIST(__ruleName)); \
+    while (ruleNode != (Upf##__ruleType##Node *) &(sess)->UPF_RULE_LIST(__ruleName)) { \
         nextNode = (Upf##__ruleType##Node *)ListNext(ruleNode); \
         UTLT_Assert(!Gtpv1TunnelRemove##__ruleType(&ruleNode->__ruleName), , \
             "Remove "#__ruleType"[%u] failed", ruleNode->__ruleName.UPF_RULE_ID(__ruleName)); \
-        RuleDeletionFromSession(__ruleType, __ruleName, (__sessionPtr), ruleNode); \
+        RuleDeletionFromSession(__ruleType, __ruleName, (sess), ruleNode); \
         IndexFree(&upf##__ruleType##NodePool, ruleNode); \
         ruleNode = nextNode; \
     }  \
-} while (0)
+}
+
+RuleListDeletionAndFreeWithGTPv1Tunnel(FAR, far);
+RuleListDeletionAndFreeWithGTPv1Tunnel(QER, qer);
+/* TODO: Uncomment these if finish these implementation
+RuleListDeletionAndFreeWithGTPv1Tunnel(URR, urr);
+RuleListDeletionAndFreeWithGTPv1Tunnel(BAR, bar);
+*/
 
 HashIndex *UpfBufPacketFirst() {
     UTLT_Assert(self.bufPacketHash, return NULL, "");
@@ -442,7 +477,7 @@ Status UpfBufPacketRemove(UpfBufPacket *bufPacket) {
     Status status;
 
     bufPacket->sessionPtr = NULL;
-    bufPacket->pdrId = 0;
+    //bufPacket->pdrId = 0;
     if (bufPacket->packetBuffer) {
         status = BufblkFree(bufPacket->packetBuffer);
         UTLT_Assert(status == STATUS_OK, return STATUS_ERROR,
@@ -589,29 +624,26 @@ Status UpfSessionRemove(UpfSession *session) {
     //     UpfUeIPFree(session->ueIpv6);
     // }
 
-    PDR_Thread_Safe(
-        RuleListDeletionAndFreeWithGTPv1Tunnel(PDR, pdr, session);
-    );
+    uint16_t pdrId;
+    UpfPDRNode *ruleNode, *nextNode;
+    ruleNode = ListFirst(&(session)->pdrList);
+    while (ruleNode != (UpfPDRNode *)&(session)->pdrList) {
+        nextNode = (UpfPDRNode *)ListNext(ruleNode);
+        pdrId = ruleNode->pdr.pdrId;
+        UpfBufPacket *tmpBufPacket = UpfBufPacketFindByPdrId(pdrId);
+        if (tmpBufPacket != NULL) {
+            UpfBufPacketRemove(tmpBufPacket);
+        }
+        ruleNode = nextNode;
+    }
 
-    FAR_Thread_Safe(
-        RuleListDeletionAndFreeWithGTPv1Tunnel(FAR, far, session);
-    );
+    UpfPDRListDeletionAndFreeWithGTPv1Tunnel(session);
+    UpfFARListDeletionAndFreeWithGTPv1Tunnel(session);
+    UpfQERListDeletionAndFreeWithGTPv1Tunnel(session);
 
-
-    RuleListDeletionAndFreeWithGTPv1Tunnel(PDR, pdr, session);
-    RuleListDeletionAndFreeWithGTPv1Tunnel(FAR, far, session);
     /* TODO: Not support yet
-    QER_Thread_Safe(
-        RuleListDeletionAndFreeWithGTPv1Tunnel(QER, qer, session);
-    );
-
-    BAR_Thread_Safe(
-        RuleListDeletionAndFreeWithGTPv1Tunnel(BAR, bar, session);
-    );
-
-    URR_Thread_Safe(
-        RuleListDeletionAndFreeWithGTPv1Tunnel(URR, urr, session);
-    );
+    UpfBARListDeletionAndFreeWithGTPv1Tunnel(session);
+    UpfURRListDeletionAndFreeWithGTPv1Tunnel(session);
     */
 
     IndexFree(&upfSessionPool, session);
@@ -686,10 +718,9 @@ UpfSession *UpfSessionAddByMessage(PfcpMessage *message) {
                 ((int8_t *)request->pDNType.value)[0]);
     UTLT_Assert(session, return NULL, "session add error");
 
-    session->smfSeid = *(uint64_t*)request->cPFSEID.value;
+    session->smfSeid = be64toh(((PfcpFSeid *) request->cPFSEID.value)->seid);
     session->upfSeid = session->index+1;
     UTLT_Trace("UPF Establishment UPF SEID: %lu", session->upfSeid);
 
     return session;
 }
-

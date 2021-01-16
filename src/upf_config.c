@@ -28,7 +28,7 @@ Status UpfLoadConfigFile(const char *configFilePath) {
     yaml_parser_set_input_file(&parser, file);
 
     document = UTLT_Calloc(1, sizeof(yaml_document_t));
-    
+
     UTLT_Assert(yaml_parser_load(&parser, document), UTLT_Free(document), "YAML parser load failed");
 
     yaml_parser_delete(&parser);
@@ -48,8 +48,25 @@ Status UpfConfigParse() {
     while (YamlIterNext(&rootIter)) {
         const char *rootKey = YamlIterGet(&rootIter, GET_KEY);
         UTLT_Assert(rootKey, return STATUS_ERROR, "The rootKey is NULL");
-        
-        if (!strcmp(rootKey, "configuration")) {
+
+        if(!strcmp(rootKey, "info")){
+            YamlIter upfIter;
+            YamlIterChild(&rootIter, &upfIter);
+            while (YamlIterNext(&upfIter)) {
+                const char *upfKey = YamlIterGet(&upfIter, GET_KEY);
+                UTLT_Assert(upfKey, return STATUS_ERROR, "The rootKey is NULL");
+
+                if (!strcmp(upfKey, "version")) {
+                    const char *configVersion = YamlIterGet(&upfIter, GET_VALUE);
+
+                    UTLT_Assert(!strcmp(configVersion, UPF_EXPECTED_CONFIG_VERSION), return STATUS_ERROR,
+                        "UPF config version is [%s], but expected is [%s].",
+                            configVersion, UPF_EXPECTED_CONFIG_VERSION);
+
+                    UTLT_Info("UPF config version [%s]", configVersion);
+                }
+            }
+        } else if (!strcmp(rootKey, "configuration")) {
             YamlIter upfIter;
             YamlIterChild(&rootIter, &upfIter);
             while (YamlIterNext(&upfIter)) {
@@ -58,7 +75,7 @@ Status UpfConfigParse() {
 
                 if (!strcmp(upfKey, "debugLevel")) {
                     const char *logLevel = YamlIterGet(&upfIter, GET_VALUE);
-                    
+
                     UTLT_Assert(UTLT_SetLogLevel(logLevel) == STATUS_OK,
                                 return STATUS_ERROR, "");
 
@@ -93,7 +110,7 @@ Status UpfConfigParse() {
                             UTLT_Assert(gtpuKey, return STATUS_ERROR, "The gtpuKey is NULL");
 
                             if (!strcmp(gtpuKey, "addr") || !strcmp(gtpuKey, "name")) {
-                                /* UTLT_Assert(ReadAddrList(&gtpuIter, hostname, &hostCount) == STATUS_OK, 
+                                /* UTLT_Assert(ReadAddrList(&gtpuIter, hostname, &hostCount) == STATUS_OK,
                                             return STATUS_ERROR, "Failed to read gtpu address");*/
                                 host = YamlIterGet(&gtpuIter, GET_VALUE);
                             } else if (!strcmp(gtpuKey, "family")) {
@@ -117,9 +134,9 @@ Status UpfConfigParse() {
                             else
                                 AddGtpv1Endpoint(host);
                         }
-                        
+
                     } while (YamlIterType(&gtpuList) == YAML_SEQUENCE_NODE);
-                    
+
                 } else if (!strcmp(upfKey, "pfcp")) {
                     YamlIter pfcpList, pfcpIter;
                     YamlIterChild(&upfIter, &pfcpList);
@@ -128,16 +145,16 @@ Status UpfConfigParse() {
                         // int i, hostCount = 0;
                         // const char *hostname[MAX_NUM_OF_HOSTNAME];
                         const char *host;
-                        
+
                         if (SetProtocolIter(&pfcpList, &pfcpIter))
                             break;
-                        
+
                         while (YamlIterNext(&pfcpIter)) {
                             const char *pfcpKey = YamlIterGet(&pfcpIter, GET_KEY);
                             UTLT_Assert(pfcpKey, return STATUS_ERROR, "The pfcpKey is NULL");
 
                             if (!strcmp(pfcpKey, "addr") || !strcmp(pfcpKey, "name")) {
-                                /* UTLT_Assert(ReadAddrList(&pfcpIter, hostname, &hostCount) == STATUS_OK, 
+                                /* UTLT_Assert(ReadAddrList(&pfcpIter, hostname, &hostCount) == STATUS_OK,
                                             return STATUS_ERROR, "Failed to read pfcp address"); */
                                 host = YamlIterGet(&pfcpIter, GET_VALUE);
                             } else {
@@ -149,7 +166,7 @@ Status UpfConfigParse() {
                             AddPfcpEndpoint(host);
 
                     } while (YamlIterType(&pfcpList) == YAML_SEQUENCE_NODE);
-                    
+
                 } else if (!strcmp(upfKey, "dnn_list")) {
                     YamlIter dnnList, dnnIter;
                     YamlIterChild(&upfIter, &dnnList);
@@ -171,7 +188,7 @@ Status UpfConfigParse() {
                                 dnnName = (char *)YamlIterGet(&dnnIter, GET_VALUE);
                             } else if (!strcmp(dnnKey, "cidr")) {
                                 char *val = (char *)YamlIterGet(&dnnIter, GET_VALUE);
-                                
+
                                 if (val) {
                                     ipStr = (const char *)strsep(&val, "/");
                                     if (ipStr)
@@ -195,7 +212,7 @@ Status UpfConfigParse() {
                             UTLT_Assert(strlen(ipStr) < sizeof(dnn->ipStr), return STATUS_ERROR,
                                 "Length is too long for IP address, Max is %u", sizeof(dnn->ipStr) - 1);
                             strcpy(dnn->ipStr, ipStr);
-                            
+
                             if (natifname) {
                                 UTLT_Assert(strlen(natifname) < sizeof(dnn->natifname), return STATUS_ERROR,
                                     "Length is too long for NAT Ifname, Max is %u", sizeof(dnn->natifname) - 1);
@@ -213,7 +230,7 @@ Status UpfConfigParse() {
     }
 
     DeleteYamlDocument();
-    
+
     return STATUS_OK;
 }
 
@@ -238,14 +255,14 @@ static int SetProtocolIter(YamlIter *protoList, YamlIter *protoIter) {
     YamlIter hostnameIter;
     YamlIterChild(protoIter, &hostnameIter);
     UTLT_Assert(YamlIterType(&hostnameIter) != YAML_MAPPING_NODE, return STATUS_ERROR, "hostnameIter is type YAML_MAPPING_NODE");
-    
+
     do {
         if (YamlIterType(&hostnameIter) == YAML_SEQUENCE_NODE) {
             if (!YamlIterNext(&hostnameIter))
                 break;
         }
         UTLT_Assert(*num <= MAX_NUM_OF_HOSTNAME, return STATUS_ERROR, "hostnameIter is type YAML_MAPPING_NODE");
-        
+
         hostname[(*num)++] = YamlIterGet(&hostnameIter, GET_VALUE);
     } while(YamlIterType(&hostnameIter) == YAML_SEQUENCE_NODE);
 

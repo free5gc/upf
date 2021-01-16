@@ -47,6 +47,7 @@ typedef struct { // TODO: Need to change name to context and split these member 
     GTPUPacketInHandlerCB PacketInGTPU;
     GetRule16CB GetPDRByID;
     GetRule32CB GetFARByID;
+    GetRule32CB GetQERByID;
 
     ThreadID PacketRecvThread;
     int epfd;
@@ -68,10 +69,9 @@ Gtp5gDevice *Gtp5gSelf();
  * Gtp5gDeviceInit - Initialize the Gtp5gDevice
  * 
  * @dev: VirtualDevice pointer for setting Gtp5gDevice
- * @port: VirtualPort pointer for setting Gtp5gDevice
- * @port: STATUS_OK or STATUS_ERROR if one of initialization part is failed
+ * @return: STATUS_OK or STATUS_ERROR if one of initialization part is failed
  */
-Status Gtp5gDeviceInit(VirtualDevice *dev, VirtualPort *port);
+Status Gtp5gDeviceInit(VirtualDevice *dev);
 
 /**
  * Gtp5gDeviceTerm - Terminate the Gtp5gDevice
@@ -79,5 +79,14 @@ Status Gtp5gDeviceInit(VirtualDevice *dev, VirtualPort *port);
  * @return: STATUS_OK or STATUS_ERROR if one of termination part is failed
  */
 Status Gtp5gDeviceTerm();
+
+/**
+ * Gtp5gDeviceAdd - Add port to Gtp5gDevice
+ * 
+ * @dev: VirtualDevice pointer for setting Gtp5gDevice
+ * @port: VirtualPort pointer for setting Gtp5gDevice
+ * @return: STATUS_OK or STATUS_ERROR if one of initialization part is failed
+ */
+Status Gtp5gDeviceAdd(VirtualDevice *dev, VirtualPort *port);
 
 #endif /* __KERNEL_GTP5G_CONTEXT_H__ */

@@ -23,7 +23,7 @@ Hash *HashMake() {
     ht->entry = NULL;
     ht->count = 0;
     ht->max = InitialMax;
-    ht->seed = (unsigned int)((now >> 32) ^ now ^ 
+    ht->seed = (unsigned int)((now >> 32) ^ now ^
                               (uintptr_t)ht ^ (uintptr_t)&now) - 1;
     ht->array = AllocArray(ht, ht->max);
     ht->hashFunc = NULL;
@@ -131,7 +131,7 @@ static unsigned int HashfuncDefault(const char *char_key, int *klen, unsigned in
     const unsigned char *key = (const unsigned char *)char_key;
     const unsigned char *p;
     int i;
-    
+
     if (*klen == HASH_KEY_STRING) {
         for (p = key; *p; p++) {
             hash = hash * 33 + *p;
@@ -185,7 +185,7 @@ static HashEntry **FindEntry(Hash *ht, const void *key, int klen, const void *va
         ht->entry = he->next;
     else
         he = UTLT_Malloc(sizeof(*he));
-    
+
     he->next = NULL;
     he->hash = hash;
     he->key  = key;
@@ -213,8 +213,9 @@ void HashSet(Hash *ht, const void *key, int klen, const void *val) {
             /* delete entry */
             HashEntry *old = *hep;
             *hep = (*hep)->next;
-            old->next = ht->entry;
-            ht->entry = old;
+            //old->next = ht->entry;
+            //ht->entry = old;
+            Free(old);
             --ht->count;
         }
         else {

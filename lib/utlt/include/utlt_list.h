@@ -64,8 +64,7 @@ typedef int (*ListHeadCompare)(ListHead *pnode1, ListHead *pnode2);
  */
 #define ListRemove(entry) do { \
 	__ListRemoveEntry((ListHead *) entry); \
-	((ListHead *) entry)->next = NULL; \
-	((ListHead *) entry)->prev = NULL; \
+    ListHeadInit((ListHead *) entry); \
 } while(0)
 
 

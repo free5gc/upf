@@ -230,3 +230,12 @@ Status PfcpSockaddrToFTeid(
 
     return STATUS_OK;
 }
+
+Status Pfcp5ByteBitRateToHost(uint8_t *bitRate, uint64_t *hostType) {
+    UTLT_Assert(bitRate && hostType, return STATUS_ERROR, "5 byte BitRate to Host Type error");
+
+    *hostType = 0;
+    memcpy(((uint8_t *) hostType) + 3, bitRate, 5);
+    *hostType = be64toh(*hostType);
+    return STATUS_OK;
+}

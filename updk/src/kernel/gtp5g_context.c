@@ -9,6 +9,7 @@
  * Linux kernel module "gtp5g", otherwise it will not be used.
  */
 
+#include <stdlib.h>
 #include <string.h>
 #include <errno.h>
 #include <net/if.h>
@@ -40,7 +41,7 @@ void UpdkPacketReceiverThread(ThreadID id, void *data) {
     struct epoll_event events[MAX_NUM_OF_EVENT];
 
     while (!ThreadStop()) {
-        nfds = EpollWait(gtp5gDevice.epfd, events, 1);
+        nfds = EpollWait(gtp5gDevice.epfd, events, 2000);
         UTLT_Assert(nfds >= 0, break, "Epoll Wait error : %s", strerror(errno));
 
         for (int i = 0; i < nfds; i++) {
@@ -76,11 +77,10 @@ FREEBUFBLK:
     return status;
 }
 
-Status Gtp5gDeviceInit(VirtualDevice *dev, VirtualPort *port) {
-    UTLT_Assert(dev && port, return STATUS_ERROR,
-        "VirtualDevice or VirtualPort shall not be NULL");
+Status Gtp5gDeviceInit(VirtualDevice *dev) {
+    UTLT_Assert(dev, return STATUS_ERROR,
+        "VirtualDevice shall not be NULL");
 
-    Status status;
     memset(&gtp5gDevice, 0, sizeof(Gtp5gDevice));
 
     strcpy(gtp5gDevice.ifname, dev->deviceID);
@@ -89,12 +89,53 @@ Status Gtp5gDeviceInit(VirtualDevice *dev, VirtualPort *port) {
     gtp5gDevice.PacketInGTPU = dev->eventCB.PacketInGTPU;
     gtp5gDevice.GetPDRByID = dev->eventCB.getPDR;
     gtp5gDevice.GetFARByID = dev->eventCB.getFAR;
+    gtp5gDevice.GetQERByID = dev->eventCB.getQER;
 
     gtp5gDevice.epfd = EpollCreate();
-    UTLT_Assert(gtp5gDevice.epfd >= 0, goto FREEGPT5GINT, "Epoll for gtp5g device create failed");
+    UTLT_Assert(gtp5gDevice.epfd >= 0, return STATUS_ERROR, "Epoll for gtp5g device create failed");
 
     UTLT_Assert(ThreadCreate(&gtp5gDevice.PacketRecvThread, UpdkPacketReceiverThread, NULL) == STATUS_OK,
         goto FREEEPOLL, "UPDK receiver thread create failed");
+
+    return STATUS_OK;
+
+FREEEPOLL:
+    close(gtp5gDevice.epfd);
+
+    return STATUS_ERROR;
+}
+
+Status Gtp5gDeviceTerm() {
+    Status status = STATUS_OK;
+
+    UTLT_Assert(BufferServerTerm() == STATUS_OK, status = STATUS_ERROR, "BufferServerTerm fail");
+
+    UTLT_Assert(EpollDeregisterEvent(gtp5gDevice.epfd, gtp5gDevice.sock) == STATUS_OK, status = STATUS_ERROR,
+        "UPDK epoll deregister error");
+
+    UTLT_Assert(gtp_dev_destroy(gtp5gDevice.ifname) >= 0, status = STATUS_ERROR,
+                "gtp5g device named %s destroy fail", gtp5gDevice.ifname);
+
+    UTLT_Assert(UdpFree(gtp5gDevice.sock) == STATUS_OK, status = STATUS_ERROR,
+                "UDP server socket free fail : IP[%s]", gtp5gDevice.port->ipStr);
+
+    UTLT_Assert(ThreadDelete(gtp5gDevice.PacketRecvThread) == STATUS_OK, status = STATUS_ERROR,
+        "UPDK receiver thread delete failed");
+
+    close(gtp5gDevice.epfd);
+
+    free(gtp5gDevice.port);
+
+    UTLT_Trace("gtp5g device destroy success");
+
+    return status;
+}
+
+Status Gtp5gDeviceAdd(VirtualDevice *dev, VirtualPort *port) {
+    UTLT_Assert(dev && port, return STATUS_ERROR,
+        "VirtualDevice or VirtualPort shall not be NULL");
+
+    Status status;
 
     // Create UDP socket
     gtp5gDevice.sock = UdpServerCreate(AF_INET, port->ipStr, GTP_V1_PORT);
@@ -130,39 +171,10 @@ Status Gtp5gDeviceInit(VirtualDevice *dev, VirtualPort *port) {
 
     return STATUS_OK;
 
-
 FREEGPT5GINT:
     gtp_dev_destroy(gtp5gDevice.ifname);
 FREEUDPSOCK:
     UdpFree(gtp5gDevice.sock);
-FREEEPOLL:
-    close(gtp5gDevice.epfd);
 
     return STATUS_ERROR;
-}
-
-Status Gtp5gDeviceTerm() {
-    Status status = STATUS_OK;
-
-    UTLT_Assert(BufferServerTerm() == STATUS_OK, status = STATUS_ERROR, "BufferServerTerm fail");
-
-    UTLT_Assert(EpollDeregisterEvent(gtp5gDevice.epfd, gtp5gDevice.sock) == STATUS_OK, status = STATUS_ERROR,
-        "UPDK epoll deregister error");
-
-    UTLT_Assert(gtp_dev_destroy(gtp5gDevice.ifname) >= 0, status = STATUS_ERROR,
-                "gtp5g device named %s destroy fail", gtp5gDevice.ifname);
-
-    UTLT_Assert(UdpFree(gtp5gDevice.sock) == STATUS_OK, status = STATUS_ERROR,
-                "UDP server socket free fail : IP[%s]", gtp5gDevice.port->ipStr);
-
-    UTLT_Assert(ThreadDelete(gtp5gDevice.PacketRecvThread) == STATUS_OK, status = STATUS_ERROR,
-        "UPDK receiver thread delete failed");
-
-    close(gtp5gDevice.epfd);
-
-    gtp5gDevice.port = NULL;
-
-    UTLT_Trace("gtp5g device destroy success");
-
-    return status;
 }

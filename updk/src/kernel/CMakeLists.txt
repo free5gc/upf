@@ -25,6 +25,7 @@ target_include_directories(${PROJECT_NAME} PUBLIC
     "${UPDK_SOURCE_DIR}/include"
     "${UPDK_SOURCE_DIR}/src/kernel/knet/include"
     "${UPDK_SOURCE_DIR}/src/kernel/gtpv1/include"
+    "${UPDK_SOURCE_DIR}/src/kernel/rule"
 )
 #target_compile_options(${PROJECT_NAME} PRIVATE -Wall -Werror)
 

@@ -32,7 +32,7 @@ Status UTLT_SetReportCaller(unsigned int flag) {
 
 int UTLT_LogPrint(int level, const char *filename, const int line, 
                   const char *funcname, const char *fmt, ...) {
-    static char buffer[MAX_SIZE_OF_BUFFER];
+    char buffer[MAX_SIZE_OF_BUFFER];
 
     unsigned int cnt, vspCnt;
     va_list vl;

@@ -113,6 +113,9 @@ Status SockAddrFreeAll(SockAddr *saList);
 int SockAddrLen(const void *sockAddr);
 
 // Utilities
+#define IPv4To4uFormatString    "%u.%u.%u.%u"
+#define IPv4To4uFormatArg(ip)   ((ip) & 0xFF), (((ip) >> 8) & 0xFF), (((ip) >> 16) & 0xFF), (((ip) >> 24) & 0xFF)
+
 const char *UTLT_InetNtop(const void *sockAddr);
 #define SockAddrIPPrint(__sockAddr) UTLT_InetNtop(__sockAddr)
 #define GetIP(__sockAddr) SockAddrIPPrint(__sockAddr)

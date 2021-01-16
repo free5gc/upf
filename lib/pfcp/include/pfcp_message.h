@@ -23,7 +23,7 @@ typedef struct _IeDescription {
     uint16_t msgLen; // msg struct size
     _Bool isTlvObj;
     int numToParse;
-    int next[35];
+    int next[80];
 } __attribute__((packed)) IeDescription;
 
 /* 5.1 General format */
@@ -776,7 +776,7 @@ typedef struct _UpdatePDR {
     PDI pDI;
     FARID fARID;
     URRID uRRID;
-    QERID qERID;
+    QERID qERID[4];
     ActivatePredefinedRules activatePredefinedRules;
     DeactivatePredefinedRules deactivatePredefinedRules;
 } __attribute__((packed)) UpdatePDR;
@@ -877,7 +877,7 @@ typedef struct _CreatePDR {
     OuterHeaderRemoval outerHeaderRemoval;
     FARID fARID;
     URRID uRRID;
-    QERID qERID;
+    QERID qERID[4];
     ActivatePredefinedRules activatePredefinedRules;
 } __attribute__((packed)) CreatePDR;
 
@@ -899,22 +899,22 @@ typedef struct _PFCPSessionEstablishmentResponse {
 typedef struct _PFCPSessionModificationRequest {
     unsigned long presence;
     FSEID cPFSEID;
-    RemovePDR removePDR;
-    RemoveFAR removeFAR;
+    RemovePDR removePDR[4];
+    RemoveFAR removeFAR[4];
     RemoveURR removeURR;
-    RemoveQER removeQER;
+    RemoveQER removeQER[4];
     RemoveBAR removeBAR;
     RemoveTrafficEndpoint removeTrafficEndpoint;
-    CreatePDR createPDR[2];
-    CreateFAR createFAR[2];
+    CreatePDR createPDR[4];
+    CreateFAR createFAR[4];
     CreateURR createURR;
-    CreateQER createQER;
+    CreateQER createQER[4];
     CreateBAR createBAR;
     CreateTrafficEndpoint createTrafficEndpoint;
-    UpdatePDR updatePDR;
-    UpdateFAR updateFAR;
+    UpdatePDR updatePDR[4];
+    UpdateFAR updateFAR[4];
     UpdateURR updateURR;
-    UpdateQER updateQER;
+    UpdateQER updateQER[4];
     UpdateBARPFCPSessionModificationRequest updateBAR;
     UpdateTrafficEndpoint updateTrafficEndpoint;
     PFCPSMReqFlags pFCPSMReqFlags;
@@ -966,10 +966,10 @@ typedef struct _PFCPSessionEstablishmentRequest {
     unsigned long presence;
     NodeID nodeID;
     FSEID cPFSEID;
-    CreatePDR createPDR[2];
-    CreateFAR createFAR[2];
+    CreatePDR createPDR[4];
+    CreateFAR createFAR[4];
     CreateURR createURR;
-    CreateQER createQER;
+    CreateQER createQER[4];
     CreateBAR createBAR;
     CreateTrafficEndpoint createTrafficEndpoint;
     PDNType pDNType;

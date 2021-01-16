@@ -6,6 +6,7 @@
  * in there, like "device.c" under "updk/src/kernel/".
  */
 
+#include <stdlib.h>
 #include <arpa/inet.h>
 
 #include "utlt_debug.h"
@@ -25,14 +26,32 @@ int Gtpv1EnvInit(EnvParams *env) {
     char *ifname = dev->deviceID;
     UTLT_Debug("Get VirtualDevice Name: %s", ifname);
 
-    VirtualPort *port;
-    // Only get the first one, because not support multiple gtp5g interface
-    VirtualDeviceForEachVirtualPort(port, dev) {
-        UTLT_Debug("Get VirtualPort Info in VirtualDevice: %s", port->ipStr);
-        UTLT_Assert(Gtp5gDeviceInit(dev, port) == STATUS_OK,
+    UTLT_Assert(Gtp5gDeviceInit(dev) == STATUS_OK,
             return -1, "Gtp5gDeviceInit failed");
-        break;
+
+    int vPortCnt = 0;
+    VirtualPort *portIt, *port = NULL;
+    // Only get the first one, because not support multiple gtp5g interface
+    VirtualDeviceForEachVirtualPort(portIt, dev) {
+        UTLT_Debug("Get VirtualPort Info in VirtualDevice: %s", portIt->ipStr);
+        if (!vPortCnt) {
+            port = malloc(sizeof(VirtualPort));
+            UTLT_Assert(port, return -1, "No space to malloc for virtual port");
+            memcpy(port, portIt, sizeof(VirtualPort));
+        }
+        vPortCnt++;
     }
+
+    UTLT_Assert(vPortCnt, return -1, "GTP-U address should not be 0");
+
+    // Multi-interface should set address in 0.0.0.0
+    if (vPortCnt > 1) {
+        UTLT_Debug("Detect multi-interface, set address to 0.0.0.0");
+        strcpy(port->ipStr, "0.0.0.0");
+    }
+
+    UTLT_Assert(Gtp5gDeviceAdd(dev, port) == STATUS_OK,
+            return -1, "Gtp5gDeviceAdd failed");
 
     // Set Routing to gtp5g interface
     DNN *dnn;

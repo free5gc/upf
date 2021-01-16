@@ -233,7 +233,7 @@ static Status EpollTerm(void *data) {
 }
 
 static Status EventQueueInit(void *data) {
-    Self()->eventQ = EventQueueCreate(O_RDWR | O_NONBLOCK);
+    Self()->eventQ = EventQueueCreate(O_RDWR);
     UTLT_Assert(Self()->eventQ > 0, return STATUS_ERROR, "");
 
     return STATUS_OK;
@@ -273,7 +273,7 @@ void PacketReceiverThread(ThreadID id, void *data) {
     prev = TimeNow();
 
     while (!ThreadStop()) {
-        nfds = EpollWait(Self()->epfd, events, 1);
+        nfds = EpollWait(Self()->epfd, events, 300);
         UTLT_Assert(nfds >= 0, , "Epoll Wait error : %s", strerror(errno));
 
         for (int i = 0; i < nfds; i++) {

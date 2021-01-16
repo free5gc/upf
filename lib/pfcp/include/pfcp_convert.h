@@ -1,6 +1,8 @@
 #ifndef __PFCP_CONVERT_H__
 #define __PFCP_CONVERT_H__
 
+#include <stdint.h>
+
 #include "utlt_debug.h"
 #include "pfcp_types.h"
 
@@ -19,7 +21,7 @@ Status PfcpIpToUeIpAddr(Ip *ip, PfcpUeIpAddr *ueIp, int *len);
 Status PfcpOuterHdrToIp(PfcpOuterHdr *outerHdr, Ip *ip);
 Status PfcpSockaddrToFTeid(
     SockAddr *addr, SockAddr *addr6, PfcpFTeid *fTeid, int *len);
-
+Status Pfcp5ByteBitRateToHost(uint8_t *bitRate, uint64_t *hostType);
 #ifdef __cplusplus
 }
 #endif /* __cplusplus */

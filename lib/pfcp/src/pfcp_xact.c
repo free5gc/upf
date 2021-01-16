@@ -79,7 +79,8 @@ PfcpXact *PfcpXactLocalCreate(PfcpNode *gnode, PfcpHeader *header, Bufblk *bufBl
     UTLT_Assert(xact, return NULL, "Transaction allocation failed");
 
     xact->origin = PFCP_LOCAL_ORIGINATOR;
-    xact->transactionId = (globalXactId == PFCP_MAX_XACT_ID ? PFCP_MIN_XACT_ID : globalXactId + 1);
+    xact->transactionId = (globalXactId == PFCP_MAX_XACT_ID ? PFCP_MIN_XACT_ID : ++globalXactId);
+
     xact->gnode = gnode;
     /*TODO: fix this
     if (globalResponseEvent) {

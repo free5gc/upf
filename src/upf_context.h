@@ -24,6 +24,7 @@
 #include "updk/init.h"
 #include "updk/rule_pdr.h"
 #include "updk/rule_far.h"
+#include "updk/rule_qer.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -38,8 +39,8 @@ typedef struct _UpfBufPacket UpfBufPacket;
 // Rule structure dependent on UPDK
 typedef UPDK_PDR UpfPDR;
 typedef UPDK_FAR UpfFAR;
-/*
 typedef UPDK_QER UpfQER;
+/*
 typedef UPDK_BAR UpfBAR;
 typedef UPDK_URR UpfURR;
 */
@@ -194,7 +195,7 @@ typedef struct {
     ListHead node;
     int index;
 
-    // UpfQER qer;
+    UpfQER qer;
 } UpfQERNode;
 
 typedef struct {
@@ -230,8 +231,8 @@ void UpfURRNodeFree(UpfURRNode *node);
 
 int UpfPDRFindByID(uint16_t id, void *ruleBuf);
 int UpfFARFindByID(uint32_t id, void *ruleBuf);
-/*
 int UpfQERFindByID(uint32_t id, void *ruleBuf);
+/*
 int UpfBARFindByID(uint32_t id, void *ruleBuf);
 int UpfURRFindByID(uint32_t id, void *ruleBuf);
 */
@@ -240,24 +241,24 @@ Status HowToHandleThisPacket(uint32_t farID, uint8_t *action);
 
 void UpfPDRDump();
 void UpfFARDump();
-/*
 void UpfQERDump();
+/*
 void UpfBARDump();
 void UpfURRDump();
 */
 
 UpfPDRNode *UpfPDRRegisterToSession(UpfSession *sess, UpfPDR *rule);
 UpfFARNode *UpfFARRegisterToSession(UpfSession *sess, UpfFAR *rule);
-/*
 UpfQERNode *UpfQERRegisterToSession(UpfSession *sess, UpfQER *rule);
+/*
 UpfBARNode *UpfBARRegisterToSession(UpfSession *sess, UpfBAR *rule);
 UpfURRNode *UpfURRRegisterToSession(UpfSession *sess, UpfURR *rule);
 */
 
 Status UpfPDRDeregisterToSessionByID(UpfSession *sess, uint16_t id);
 Status UpfFARDeregisterToSessionByID(UpfSession *sess, uint32_t id);
-/*
 Status UpfQERDeregisterToSessionByID(UpfSession *sess, uint32_t id);
+/*
 Status UpfBARDeregisterToSessionByID(UpfSession *sess, uint32_t id);
 Status UpfURRDeregisterToSessionByID(UpfSession *sess, uint32_t id);
 */

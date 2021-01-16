@@ -111,230 +111,6 @@ Status MatchRuleNodeFree(MatchRuleNode *node) {
     return STATUS_OK;
 }
 
-
-// Copy from libgtp5gnl
-static inline uint32_t *port_list_create(char *port_list) {
-    uint32_t *ret = calloc(0xff, sizeof(uint32_t));
-    uint32_t port1, port2, cnt = 0;
-
-    char *tok_ptr = strtok(port_list, ","), *chr_ptr;
-    while (tok_ptr != NULL)  {
-        chr_ptr = strchr(tok_ptr, '-');
-        if (chr_ptr) {
-            *chr_ptr = '\0'; port1 = atoi(tok_ptr); port2 = atoi(chr_ptr + 1);
-            if (port1 <= port2)
-                ret[++cnt] = port1 + (port2 << 16);
-            else
-                ret[++cnt] = port2 + (port1 << 16);
-        }
-        else {
-            port1 = atoi(tok_ptr);
-            ret[++cnt] = port1 + (port1 << 16);
-        }
-        tok_ptr = strtok(NULL, ",");
-    }
-    ret[0] = cnt;
-
-    return ret;
-}
-
-Status MatchRuleCompile(UPDK_PDR *pdr, MatchRuleNode *matchRule) {
-    UTLT_Assert(pdr && matchRule, return STATUS_ERROR, "PDR or MatchRuleNode should not be NULL");
-
-    // Clean up MatchRuleNode
-    MatchRuleDelete(matchRule);
-    memset(matchRule, 0, sizeof(MatchRuleNode));
-
-    matchRule->precedence = pdr->precedence;
-    
-    if (pdr->flags.pdi) {
-        UPDK_PDI *pdi = &pdr->pdi;
-
-        UTLT_Assert(pdi->flags.sourceInterface, return STATUS_ERROR,
-            "Need source interface in PDI to represent UL or DL");
-        
-        uint32_t *ueIP, *ueMask;
-        switch(pdi->sourceInterface) {
-            case 0: // Access or UL
-                ueIP = &matchRule->saddr;
-                ueMask = &matchRule->smask;
-                break;
-            case 1: // Core or DL
-            case 2: // SGi-LAN or N6-LAN
-                ueIP = &matchRule->daddr;
-                ueMask = &matchRule->dmask;
-                break;
-            case 3:
-                UTLT_Error("Source interface does NOT support CP-function yet");
-                return STATUS_ERROR;
-            default:
-                UTLT_Error("%u in Source interfacet is reversed, it cannot use", pdi->sourceInterface);
-                return STATUS_ERROR;
-        }
-
-        if (pdi->flags.ueIpAddress) {
-            UPDK_UEIPAddress *ueIpAddress = &pdi->ueIpAddress;
-            
-            if (ueIpAddress->flags.v6)
-                UTLT_Warning("Do NOT support IPv6 yet");
-
-            if (ueIpAddress->flags.v4) {
-                *ueIP = ueIpAddress->ipv4.s_addr;
-                *ueMask = UINT_MAX;
-            }
-        }
-
-        if (pdi->flags.fTeid) {
-            UPDK_FTEID *fteid = &pdi->fTeid;
-
-            matchRule->teid = fteid->teid;
-
-            // TODO: Check Outer header
-        }
-
-        if (pdi->flags.sdfFilter) {
-            UPDK_SDFFilter *sdfFilter = &pdi->sdfFilter;
-
-            if (sdfFilter->flags.fd && sdfFilter->lenOfFlowDescription) {
-                char *ruleStr = sdfFilter->flowDescription;
-                ruleStr[sdfFilter->lenOfFlowDescription] = 0;
-
-                // Copy from libgtp5gnl
-                char reg_act[] = "(permit)";
-                char reg_direction[] = "(in|out)";
-                char reg_proto[] = "(ip|[0-9]{1,3}})";
-                char reg_src_ip_mask[] = "(any|assigned|[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}(/[0-9]{1,5})?)";
-                char reg_dest_ip_mask[] = "(any|assigned|[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}(/[0-9]{1,5})?)";
-                char reg_port[] = "([ ][0-9]{1,5}([,-][0-9]{1,5})*)?";
-
-                char reg[0xfff];
-                sprintf(reg, "^%s %s %s from %s%s to %s%s$", reg_act, reg_direction, reg_proto,
-                    reg_src_ip_mask, reg_port,
-                    reg_dest_ip_mask, reg_port);
-
-                regex_t preg;
-                regmatch_t pmatch[0x10];
-                int nmatch = sizeof(pmatch) / sizeof(regmatch_t);
-                int cflags = REG_EXTENDED | REG_ICASE;
-
-                UTLT_Assert(!regcomp(&preg, reg, cflags), return STATUS_ERROR,
-                    "Regex string for SDF filter description format error");
-
-                UTLT_Assert(!regexec(&preg, ruleStr, nmatch, pmatch, 0), return STATUS_ERROR,
-                    "SDF filter description format error");
-
-                int len;
-                char buf[0xff];
-
-                // Get Action
-                len = pmatch[1].rm_eo - pmatch[1].rm_so;
-                strncpy(buf, ruleStr + pmatch[1].rm_so, len); buf[len] = '\0';
-                UTLT_Assert(!strcmp(buf, "permit"), return STATUS_ERROR,
-                    "SDF filter description action only support 'permit', not support '%s'", buf);
-                
-                // Get Direction
-                len = pmatch[2].rm_eo - pmatch[2].rm_so;
-                strncpy(buf, ruleStr + pmatch[2].rm_so, len); buf[len] = '\0';
-                if (strcmp(buf, "in") == 0) {
-                    // TODO: Handle something here if need
-                }
-                else if (strcmp(buf, "out") == 0) {
-                    // TODO: Handle something here if need
-                }
-                else {
-                    UTLT_Error("SDF filter description direction not support '%s'", buf);
-                    return STATUS_ERROR;
-                }
-
-                // Get Protocol
-                len = pmatch[3].rm_eo - pmatch[3].rm_so;
-                strncpy(buf, ruleStr + pmatch[3].rm_so, len); buf[len] = '\0';
-                if (strcmp(buf, "ip") == 0)
-                    matchRule->proto = 0;
-                else {
-                    int tmp = atoi(buf);
-                    UTLT_Assert(tmp <= 0xff, return STATUS_ERROR,
-                        "SDF filter description protocol[%s] not support", buf);
-
-                    // TODO: Need to check if any value in this field
-                    matchRule->proto = tmp;
-                }
-
-                // Get SRC Mask
-                len = pmatch[5].rm_eo - pmatch[5].rm_so;
-                if (len) {
-                    strncpy(buf, ruleStr + pmatch[5].rm_so + 1, len - 1); buf[len - 1] = '\0';
-                    int smask = atoi(buf);
-                    UTLT_Assert(smask <= 32 && smask > 0, return STATUS_ERROR,
-                        "SDF filter description SRC mask[%s] is invalid", smask);
-
-                    // TODO: Need to check if any value in this field
-                    matchRule->smask = UINT_MAX - ((1 << (32 - smask)) - 1);
-                }
-
-                // Get SRC IP
-                len = pmatch[4].rm_eo - pmatch[4].rm_so - len;
-                strncpy(buf, ruleStr + pmatch[4].rm_so, len); buf[len] = '\0';
-                // TODO: Need to check if any value in this field
-                if (strcmp(buf, "any") == 0)
-                    matchRule->saddr = 0;
-                else if (strcmp(buf, "assigned") == 0) {
-                    UTLT_Error("SDF filter description dest ip do NOT support assigned yet");
-                    return STATUS_ERROR;
-                }
-                else
-                    UTLT_Assert(inet_pton(AF_INET, buf, &matchRule->saddr) == 1, return STATUS_ERROR,
-                        "SDF filter description src ip[%s] is invalid", buf);
-
-                // Get SRC Port
-                len = pmatch[6].rm_eo - pmatch[6].rm_so;
-                if (len) {
-                    strncpy(buf, ruleStr + pmatch[6].rm_so + 1, len - 1); buf[len - 1] = '\0';
-                    matchRule->sport_list = port_list_create(buf);
-                }
-
-                // Get Dest Mask
-                len = pmatch[9].rm_eo - pmatch[9].rm_so;
-                if (len) {
-                    strncpy(buf, ruleStr + pmatch[9].rm_so + 1, len - 1); buf[len - 1] = '\0';
-                    int dmask = atoi(buf);
-                    UTLT_Assert(dmask <= 32 && dmask > 0, return STATUS_ERROR,
-		                "SDF filter description Dest mask[%s] is invalid", dmask);
-                    
-                    // TODO: Need to check if any value in this field
-                    matchRule->dmask = UINT_MAX - ((1 << (32 - dmask)) - 1);
-                }
-
-                // Get Dest IP
-                len = pmatch[8].rm_eo - pmatch[8].rm_so - len;
-                strncpy(buf, ruleStr + pmatch[8].rm_so, len); buf[len] = '\0';
-                // TODO: Need to check if any value in this field
-                if (strcmp(buf, "any") == 0)
-                    matchRule->daddr = 0;
-                else if (strcmp(buf, "assigned") == 0) {
-                    UTLT_Error("SDF filter description dest ip do NOT support assigned yet");
-                    return STATUS_ERROR;
-                }
-                else 
-                    UTLT_Assert(inet_pton(AF_INET, buf, &matchRule->daddr) == 1, return STATUS_ERROR,
-                        "SDF filter description dest ip[%s] is invalid", buf);
-
-                // Get Dest Port
-                len = pmatch[10].rm_eo - pmatch[10].rm_so;
-                if (len) {
-                    strncpy(buf, ruleStr + pmatch[10].rm_so + 1, len - 1); buf[len - 1] = '\0';
-                    matchRule->dport_list = port_list_create(buf);
-                }
-
-            }
-
-            // TODO: Add if need other part
-        }
-    }
-
-    return STATUS_OK;
-}
-
 static inline ListHead *GetLastSmallPrecedenceFromList(ListHead *entry, MatchRuleNode *matchRule) {
     ListHead *it = entry, *itNext;
     ListForEachSafe(it, itNext, entry) {
@@ -693,4 +469,249 @@ int PacketInWithGTPU(uint8_t *pkt, uint16_t pktlen, uint32_t remoteIP, uint16_t 
 
 MATCHFAILED:
     return -1;
+}
+
+// Copy from libgtp5gnl
+static inline uint32_t *port_list_create(char *port_list) {
+    uint32_t *ret = calloc(0xff, sizeof(uint32_t));
+    uint32_t port1, port2, cnt = 0;
+
+    char *tok_ptr = strtok(port_list, ","), *chr_ptr;
+    while (tok_ptr != NULL)  {
+        chr_ptr = strchr(tok_ptr, '-');
+        if (chr_ptr) {
+            *chr_ptr = '\0'; port1 = atoi(tok_ptr); port2 = atoi(chr_ptr + 1);
+            if (port1 <= port2)
+                ret[++cnt] = port1 + (port2 << 16);
+            else
+                ret[++cnt] = port2 + (port1 << 16);
+        }
+        else {
+            port1 = atoi(tok_ptr);
+            ret[++cnt] = port1 + (port1 << 16);
+        }
+        tok_ptr = strtok(NULL, ",");
+    }
+    ret[0] = cnt;
+
+    return ret;
+}
+
+// Copy from libgtp5gnl
+static inline uint32_t decimal_to_netmask(uint32_t mask) {
+    uint32_t ret = 0, one_block;
+    for (int i = 0; i < 4 && mask > 0; i++, mask -= 8) {
+        one_block = (mask >= 8 ? 8 : mask);
+        ret += (((1 << one_block) - 1) << (8 - one_block)) << (i * 8);
+    }
+    return ret;
+}
+
+Status MatchRuleCompile(UPDK_PDR *pdr, MatchRuleNode *matchRule) {
+    UTLT_Assert(pdr && matchRule, return STATUS_ERROR, "PDR or MatchRuleNode should not be NULL");
+
+    uint32_t ipv4NetType;
+
+    // Clean up MatchRuleNode
+    MatchRuleDelete(matchRule);
+    memset(matchRule, 0, sizeof(MatchRuleNode));
+
+    matchRule->precedence = pdr->precedence;
+    
+    if (pdr->flags.pdi) {
+        UPDK_PDI *pdi = &pdr->pdi;
+
+        UTLT_Assert(pdi->flags.sourceInterface, return STATUS_ERROR,
+            "Need source interface in PDI to represent UL or DL");
+        
+        uint32_t *ueIP, *ueMask;
+        switch(pdi->sourceInterface) {
+            case 0: // Access or UL
+                ueIP = &matchRule->saddr;
+                ueMask = &matchRule->smask;
+                break;
+            case 1: // Core or DL
+            case 2: // SGi-LAN or N6-LAN
+                ueIP = &matchRule->daddr;
+                ueMask = &matchRule->dmask;
+                break;
+            case 3:
+                UTLT_Error("Source interface does NOT support CP-function yet");
+                return STATUS_ERROR;
+            default:
+                UTLT_Error("%u in Source interfacet is reversed, it cannot use", pdi->sourceInterface);
+                return STATUS_ERROR;
+        }
+
+        if (pdi->flags.ueIpAddress) {
+            UPDK_UEIPAddress *ueIpAddress = &pdi->ueIpAddress;
+            
+            if (ueIpAddress->flags.v6)
+                UTLT_Warning("Do NOT support IPv6 yet");
+
+            if (ueIpAddress->flags.v4) {
+                *ueIP = ueIpAddress->ipv4.s_addr;
+                *ueMask = UINT_MAX;
+            }
+        }
+
+        if (pdi->flags.fTeid) {
+            UPDK_FTEID *fteid = &pdi->fTeid;
+
+            matchRule->teid = fteid->teid;
+
+            // TODO: Check Outer header
+        }
+
+        if (pdi->flags.sdfFilter) {
+            UPDK_SDFFilter *sdfFilter = &pdi->sdfFilter;
+
+            if (sdfFilter->flags.fd && sdfFilter->lenOfFlowDescription) {
+                char *ruleStr = sdfFilter->flowDescription;
+                ruleStr[sdfFilter->lenOfFlowDescription] = 0;
+
+                // Copy from libgtp5gnl
+                char reg_act[] = "(permit)";
+                char reg_direction[] = "(in|out)";
+                char reg_proto[] = "(ip|[0-9]{1,3})";
+                char reg_src_ip_mask[] = "(any|assigned|[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}(/[0-9]{1,2})?)";
+                char reg_dest_ip_mask[] = "(any|assigned|[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}(/[0-9]{1,2})?)";
+                char reg_port[] = "([ ][0-9]{1,5}([,-][0-9]{1,5})*)?";
+
+                char reg[0xfff];
+                sprintf(reg, "^%s %s %s from %s%s to %s%s$", reg_act, reg_direction, reg_proto,
+                    reg_src_ip_mask, reg_port,
+                    reg_dest_ip_mask, reg_port);
+
+                regex_t preg;
+                regmatch_t pmatch[0x10];
+                int nmatch = sizeof(pmatch) / sizeof(regmatch_t);
+                int cflags = REG_EXTENDED | REG_ICASE;
+
+                UTLT_Assert(!regcomp(&preg, reg, cflags), return STATUS_ERROR,
+                    "Regex string for SDF filter description format error");
+
+                UTLT_Assert(!regexec(&preg, ruleStr, nmatch, pmatch, 0), return STATUS_ERROR,
+                    "SDF filter description format error");
+
+                int len;
+                char buf[0xff];
+
+                // Get Action
+                len = pmatch[1].rm_eo - pmatch[1].rm_so;
+                strncpy(buf, ruleStr + pmatch[1].rm_so, len); buf[len] = '\0';
+                UTLT_Assert(!strcmp(buf, "permit"), return STATUS_ERROR,
+                    "SDF filter description action only support 'permit', not support '%s'", buf);
+                
+                // Get Direction
+                len = pmatch[2].rm_eo - pmatch[2].rm_so;
+                strncpy(buf, ruleStr + pmatch[2].rm_so, len); buf[len] = '\0';
+                if (strcmp(buf, "in") == 0) {
+                    // TODO: Handle something here if need
+                }
+                else if (strcmp(buf, "out") == 0) {
+                    // TODO: Handle something here if need
+                }
+                else {
+                    UTLT_Error("SDF filter description direction not support '%s'", buf);
+                    return STATUS_ERROR;
+                }
+
+                // Get Protocol
+                len = pmatch[3].rm_eo - pmatch[3].rm_so;
+                strncpy(buf, ruleStr + pmatch[3].rm_so, len); buf[len] = '\0';
+                if (strcmp(buf, "ip") == 0)
+                    matchRule->proto = 0;
+                else {
+                    int tmp = atoi(buf);
+                    UTLT_Assert(tmp <= 0xff, return STATUS_ERROR,
+                        "SDF filter description protocol[%s] not support", buf);
+
+                    // TODO: Need to check if any value in this field
+                    matchRule->proto = tmp;
+                }
+
+                // Get SRC Mask
+                len = pmatch[5].rm_eo - pmatch[5].rm_so;
+                if (len) {
+                    strncpy(buf, ruleStr + pmatch[5].rm_so + 1, len - 1); buf[len - 1] = '\0';
+                    int smask = atoi(buf);
+                    UTLT_Assert(smask <= 32 && smask > 0, return STATUS_ERROR,
+                        "SDF filter description SRC mask[%s] is invalid", smask);
+
+                    // TODO: Need to check if any value in this field
+                    matchRule->smask = decimal_to_netmask(smask);
+                }
+
+                // Get SRC IP
+                len = pmatch[4].rm_eo - pmatch[4].rm_so - len;
+                strncpy(buf, ruleStr + pmatch[4].rm_so, len); buf[len] = '\0';
+                // TODO: Need to check if any value in this field
+                if (strcmp(buf, "assigned") == 0) {
+                    UTLT_Error("SDF filter description src ip do NOT use assigned");
+                    return STATUS_ERROR;
+                }
+                else {
+                    UTLT_Assert(inet_pton(AF_INET, buf, &ipv4NetType) == 1, return STATUS_ERROR,
+                        "SDF filter description src ip[%s] is invalid", buf);
+                    if (!matchRule->saddr)
+                        matchRule->saddr = ipv4NetType;
+                    else
+                        UTLT_Assert(IPv4Match(matchRule->saddr, ipv4NetType, matchRule->smask), return STATUS_ERROR,
+                                "SDF filter description src ip["IPv4To4uFormatString"] with mask["IPv4To4uFormatString"] is conflict to UE IP["IPv4To4uFormatString"]",
+                                IPv4To4uFormatArg(ipv4NetType), IPv4To4uFormatArg(matchRule->smask), IPv4To4uFormatArg(matchRule->saddr));
+                }
+
+                // Get SRC Port
+                len = pmatch[6].rm_eo - pmatch[6].rm_so;
+                if (len) {
+                    strncpy(buf, ruleStr + pmatch[6].rm_so + 1, len - 1); buf[len - 1] = '\0';
+                    matchRule->sport_list = port_list_create(buf);
+                }
+
+                // Get Dest Mask
+                len = pmatch[9].rm_eo - pmatch[9].rm_so;
+                if (len) {
+                    strncpy(buf, ruleStr + pmatch[9].rm_so + 1, len - 1); buf[len - 1] = '\0';
+                    int dmask = atoi(buf);
+                    UTLT_Assert(dmask <= 32 && dmask > 0, return STATUS_ERROR,
+		                "SDF filter description Dest mask[%s] is invalid", dmask);
+                    
+                    // TODO: Need to check if any value in this field
+                    matchRule->dmask = decimal_to_netmask(dmask);
+                }
+
+                // Get Dest IP
+                len = pmatch[8].rm_eo - pmatch[8].rm_so - len;
+                strncpy(buf, ruleStr + pmatch[8].rm_so, len); buf[len] = '\0';
+                // TODO: Need to check if any value in this field
+                if (strcmp(buf, "assigned") == 0) {
+                    UTLT_Error("SDF filter description dest ip do NOT use assigned");
+                    return STATUS_ERROR;
+                }
+                else {
+                    UTLT_Assert(inet_pton(AF_INET, buf, &ipv4NetType) == 1, return STATUS_ERROR,
+                        "SDF filter description dest ip[%s] is invalid", buf);
+                    if (!matchRule->daddr)
+                        matchRule->daddr = ipv4NetType;
+                    else
+                        UTLT_Assert(IPv4Match(matchRule->daddr, ipv4NetType, matchRule->dmask), return STATUS_ERROR,
+                                "SDF filter description dest ip["IPv4To4uFormatString"] with mask["IPv4To4uFormatString"] is conflict to UE IP["IPv4To4uFormatString"]",
+                                IPv4To4uFormatArg(ipv4NetType), IPv4To4uFormatArg(matchRule->dmask), IPv4To4uFormatArg(matchRule->daddr));
+                }
+
+                // Get Dest Port
+                len = pmatch[10].rm_eo - pmatch[10].rm_so;
+                if (len) {
+                    strncpy(buf, ruleStr + pmatch[10].rm_so + 1, len - 1); buf[len - 1] = '\0';
+                    matchRule->dport_list = port_list_create(buf);
+                }
+
+            }
+
+            // TODO: Add if need other part
+        }
+    }
+
+    return STATUS_OK;
 }

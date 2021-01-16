@@ -1,12 +1,5 @@
 #include "updk/rule.h"
 
-/**
- * This file is dependent on how UPF to decode PFCP message from SMF.
- * Therefore, it includes "pfcp_message.h" under "upf/lib/pfcp".
- * 
- * Please modify rule type if you use other UPF with different PFCP.
- */
-
 #include <arpa/inet.h>
 
 #include "utlt_debug.h"

@@ -2,10 +2,13 @@
 
 #include "utlt_debug.h"
 #include "utlt_network.h"
-#include "gtp_buffer.h"
 
 #include "gtp5g_context.h"
+#include "gtp_buffer.h"
 #include "updk/rule_pdr.h"
+#include "updk/rule_far.h"
+#include "updk/rule_qer.h"
+#include "rule_tools.h"
 
 // TODO: Need to implement
 Status UPDKBufferHandler(Sock *sock, void *data) {
@@ -24,6 +27,27 @@ Status UPDKBufferHandler(Sock *sock, void *data) {
     UPDK_PDR updkPDR;
     int packetInStatus = Gtp5gSelf()->PacketInL3(pktbuf->buf, pktbuf->len, &updkPDR);
     UTLT_Assert(packetInStatus > 0, goto ERROR_AND_FREE, "Find Rule for buffering test failed");
+
+    /* TODO: Only for debug or demo, get related FAR and QER from UPF
+    UPDK_FAR updkFAR;
+    if (!updkPDR.flags.farId || Gtp5gSelf()->GetFARByID(updkPDR.farId, &updkFAR) < 0) {
+        UTLT_Error("From GetFARByID, found PDR #%u, but cannot get FAR #%u from UPF", updkPDR.pdrId, updkPDR.farId);
+    } else {
+        UTLT_Info("From GetFARByID, found PDR #%u, and found FAR #%u in UPF", updkPDR.pdrId, updkPDR.farId);
+    }
+
+    UPDK_QER updkQER;
+    if (updkPDR.flags.qerId) {
+        for (int i = 0; i < sizeof(updkPDR.qerId) / sizeof(uint32_t) && updkPDR.qerId[i]; i++) {
+            if (Gtp5gSelf()->GetQERByID(updkPDR.qerId[i], &updkQER) < 0) {
+                UTLT_Error("From GetQERByID, found PDR #%u, but cannot get QER #%u from UPF", updkPDR.pdrId, updkPDR.qerId[i]);
+            } else {
+                UTLT_Info("From GetQERByID, found PDR #%u, and found QER #%u in UPF", updkPDR.pdrId, updkPDR.qerId[i]);
+                ShowQERIEsInInfoLog(&updkQER);
+            }
+        }   
+    }
+    */
 
     BufblkFree(pktbuf);
 
