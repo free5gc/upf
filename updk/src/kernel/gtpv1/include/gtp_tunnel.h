@@ -5,6 +5,11 @@
 
 #include "libgtp5gnl/gtp5gnl.h"
 
+Status GtpTunnelAddQer(const char *ifname, struct gtp5g_qer *qer);
+Status GtpTunnelModQer(const char *ifname, struct gtp5g_qer *qer);
+Status GtpTunnelDelQer(const char *ifname, uint32_t id);
+struct gtp5g_qer *GtpTunnelFindQerById(const char *ifname, uint32_t id);
+
 Status GtpTunnelAddPdr(const char *ifname, struct gtp5g_pdr *pdr);
 Status GtpTunnelModPdr(const char *ifname, struct gtp5g_pdr *pdr);
 Status GtpTunnelDelPdr(const char *ifname, uint16_t id);
