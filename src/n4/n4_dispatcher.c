@@ -34,7 +34,7 @@ void UpfDispatcher(const Event *event) {
                     "Build Session Report Request error");
 
         xact = PfcpXactLocalCreate(session->pfcpNode, &header, bufBlk);
-        UTLT_Assert(xact, bufBlk && BufblkFree(bufBlk); return, "pfcpXactLocalCreate error");
+        UTLT_Assert(xact, if (bufBlk) BufblkFree(bufBlk); return, "pfcpXactLocalCreate error");
 
         status = PfcpXactCommit(xact);
         UTLT_Assert(status == STATUS_OK, return, "xact commit error");
