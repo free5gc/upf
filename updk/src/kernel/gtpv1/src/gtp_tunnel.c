@@ -10,6 +10,95 @@
 #include "libgtp5gnl/gtp5g.h"
 #include "libgtp5gnl/gtp5gnl.h"
 
+Status GtpTunnelAddQer(const char *ifname, struct gtp5g_qer *qer) {
+    Status status;
+    NetlinkInfo info;
+
+    UTLT_Assert(qer, return STATUS_ERROR, "QER is NULL");
+
+    status = NetlinkSockOpen(&info, ifname, "gtp5g");
+    UTLT_Assert(status == STATUS_OK, return STATUS_ERROR, "NetlinkSockOpen fail");
+
+    struct gtp5g_dev *dev = gtp5g_dev_alloc();
+    gtp5g_dev_set_ifidx(dev, info.ifidx);
+
+    UTLT_Assert(!gtp5g_add_qer(info.genl_id, info.nl, dev, qer), status = STATUS_ERROR,
+        "GtpTunnelAddQer Fail: QER id[%u]", *gtp5g_qer_get_id(qer));
+
+    gtp5g_dev_free(dev);
+    NetlinkSockClose(&info);
+
+    return status;
+}
+
+Status GtpTunnelModQer(const char *ifname, struct gtp5g_qer *qer) {
+    Status status;
+    NetlinkInfo info;
+
+    UTLT_Assert(qer, return STATUS_ERROR, "QER is NULL");
+
+    status = NetlinkSockOpen(&info, ifname, "gtp5g");
+    UTLT_Assert(status == STATUS_OK, return STATUS_ERROR, "NetlinkSockOpen fail");
+
+    struct gtp5g_dev *dev = gtp5g_dev_alloc();
+    gtp5g_dev_set_ifidx(dev, info.ifidx);
+
+    UTLT_Assert(!gtp5g_mod_qer(info.genl_id, info.nl, dev, qer), status = STATUS_ERROR,
+        "GtpTunnelModQer Fail: QER id[%u]", *gtp5g_qer_get_id(qer));
+
+    gtp5g_dev_free(dev);
+    NetlinkSockClose(&info);
+
+    return status;
+}
+
+Status GtpTunnelDelQer(const char *ifname, uint32_t id) {
+    Status status;
+    NetlinkInfo info;
+
+    status = NetlinkSockOpen(&info, ifname, "gtp5g");
+    UTLT_Assert(status == STATUS_OK, return STATUS_ERROR, "NetlinkSockOpen fail");
+
+    struct gtp5g_dev *dev = gtp5g_dev_alloc();
+    gtp5g_dev_set_ifidx(dev, info.ifidx);
+
+    struct gtp5g_qer *qer = gtp5g_qer_alloc();
+    gtp5g_qer_set_id(qer, id);
+    
+    UTLT_Assert(!gtp5g_del_qer(info.genl_id, info.nl, dev, qer), status = STATUS_ERROR,
+        "GtpTunnelDelqer fail: QER id[%u]", id);
+
+    gtp5g_qer_free(qer);
+    gtp5g_dev_free(dev);
+    NetlinkSockClose(&info);
+
+    return status;
+}
+
+struct gtp5g_qer *GtpTunnelFindQerById(const char *ifname, uint32_t id) {
+    Status status;
+    NetlinkInfo info;
+
+    status = NetlinkSockOpen(&info, ifname, "gtp5g");
+    UTLT_Assert(status == STATUS_OK, return NULL, "NetlinkSockOpen fail");
+
+    struct gtp5g_dev *dev = gtp5g_dev_alloc();
+    gtp5g_dev_set_ifidx(dev, info.ifidx);
+
+    struct gtp5g_qer *qer = gtp5g_qer_alloc();
+    gtp5g_qer_set_id(qer, id);
+    
+    struct gtp5g_qer *rt_qer;
+    UTLT_Assert((rt_qer = gtp5g_qer_find_by_id(info.genl_id, info.nl, dev, qer)), , 
+        "GtpTunnelFindQerById fail: QER id[%u]", id);
+
+    gtp5g_qer_free(qer);
+    gtp5g_dev_free(dev);
+    NetlinkSockClose(&info);
+
+    return rt_qer;
+}
+
 Status GtpTunnelAddPdr(const char *ifname, struct gtp5g_pdr *pdr) {
     Status status;
     NetlinkInfo info;

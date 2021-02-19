@@ -6,12 +6,15 @@ enum gtp5g_genl_cmds {
 
     GTP5G_CMD_ADD_PDR,
     GTP5G_CMD_ADD_FAR,
+    GTP5G_CMD_ADD_QER,
 
     GTP5G_CMD_DEL_PDR,
     GTP5G_CMD_DEL_FAR,
+    GTP5G_CMD_DEL_QER,
 
     GTP5G_CMD_GET_PDR,
     GTP5G_CMD_GET_FAR,
+    GTP5G_CMD_GET_QER,
 
     __GTP5G_CMD_MAX,
 };
@@ -29,6 +32,7 @@ enum gtp5g_pdr_attrs {
     GTP5G_PDR_PDI,
     GTP5G_OUTER_HEADER_REMOVAL,
     GTP5G_PDR_FAR_ID,
+    GTP5G_PDR_QER_ID,
 
     /* Not in 3GPP spec, just used for routing */
     GTP5G_PDR_ROLE_ADDR_IPV4,
@@ -139,5 +143,52 @@ enum {
     __GTP5G_SDF_FILTER_DIRECTION_MAX,
 };
 #define GTP5G_SDF_FILTER_DIRECTION_MAX (__GTP5G_SDF_FILTER_DIRECTION_MAX - 1)
+
+/* ------------------------------------------------------------------
+ *								QER
+ * ------------------------------------------------------------------
+ * */
+enum gtp5g_qer_attrs {
+    /* gtp5g_device_attrs in this part */
+
+    GTP5G_QER_ID = 3,
+    GTP5G_QER_GATE,
+    GTP5G_QER_MBR,
+	GTP5G_QER_GBR,
+	GTP5G_QER_CORR_ID,
+	GTP5G_QER_RQI,
+	GTP5G_QER_QFI,
+	GTP5G_QER_PPI,
+	GTP5G_QER_RCSR,
+	
+
+    /* Not IEs in 3GPP Spec, for other purpose */
+    GTP5G_QER_RELATED_TO_PDR,
+
+    __GTP5G_QER_ATTR_MAX,
+};
+#define GTP5G_QER_ATTR_MAX (__GTP5G_QER_ATTR_MAX - 1)
+
+/* Nest in GTP5G_QER_MBR */
+enum gtp5g_qer_mbr_attrs {
+    GTP5G_QER_MBR_UL_HIGH32 = 1,
+    GTP5G_QER_MBR_UL_LOW8,
+    GTP5G_QER_MBR_DL_HIGH32,
+    GTP5G_QER_MBR_DL_LOW8,
+
+    __GTP5G_QER_MBR_ATTR_MAX,
+};
+#define GTP5G_QER_MBR_ATTR_MAX (__GTP5G_QER_MBR_ATTR_MAX - 1)
+
+/* Nest in GTP5G_QER_GBR */
+enum gtp5g_qer_gbr_attrs {
+    GTP5G_QER_GBR_UL_HIGH32 = 1,
+    GTP5G_QER_GBR_UL_LOW8,
+    GTP5G_QER_GBR_DL_HIGH32,
+    GTP5G_QER_GBR_DL_LOW8,
+
+    __GTP5G_QER_GBR_ATTR_MAX,
+};
+#define GTP5G_QER_GBR_ATTR_MAX (__GTP5G_QER_GBR_ATTR_MAX - 1)
 
 #endif /* _UAPI_LINUX_GTP_H_ */
