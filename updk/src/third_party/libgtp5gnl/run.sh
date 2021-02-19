@@ -2,7 +2,7 @@
 SCRIPT_DIR=`pwd`/script
 
 Usage() {
-    echo "usage: $0 < SimpleUPTest | ULCLTest1 | RANSetup | UPFSetup | I-UPFSetup | A-UPFSetup | Clean >"
+    echo "usage: $0 < SimpleUPTest | ULCLTest1 | RANSetup | UPFSetup | I-UPFSetup | A-UPFSetup | UPF_PDR_FAR_QER | Clean >"
 }
 
 if [ $# -ne 1 ]; then
@@ -52,6 +52,8 @@ elif [ $1 == "I-UPFSetup" ]; then
     ./iupf.sh
 elif [ $1 == "A-UPFSetup" ]; then
     ./aupf.sh
+elif [ $1 == "UPF_PDR_FAR_QER" ]; then
+    ./upf_pdr_far_qer.sh
 elif [ $1 == "Clean" ]; then
     ./cleanup.sh
 else

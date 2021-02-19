@@ -1,6 +1,8 @@
 ROOT_PATH=`cd .. && pwd`
 LIBGTP5GNL_TOOLS_PATH=${ROOT_PATH}/tools
 
+DUMP_NS=1
+
 NS2="ns2"
 NS3="ns3"
 

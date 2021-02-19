@@ -37,3 +37,14 @@ ULCL Test (RAN + I-UPF + A-UPF)
 ```
 ./run.sh ULCLTest1
 ```
+
+### Change Log
+#### v0.2.0
++ Changed to host type between gtp5g and libgtp5gnl
++ Supported forwarding policy feature, but need to set `ip rule` and `ip route` with Linux mark by self
++ Fixed bugs about "any" and "assigned" in SDF filter
++ Fixed bugs about netmask translation between gtp5g and libgtp5gnl in SDF filter
+
+#### v0.1.0
++ First version
++ Supported packet matching about UE IP, TEID and SDF filter
