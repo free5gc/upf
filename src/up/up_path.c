@@ -196,7 +196,9 @@ Status UpSendPacketByPdrFar(UpfPDR *pdr, UpfFAR *far, Sock *sock) {
             BufblkBuf(sendBuf, bufStorage->packetBuffer);
 
             status = UdpSendTo(sock, sendBuf->buf, sendBuf->len);
-            UTLT_Assert(status == STATUS_OK, return status, "UdpSendTo failed");
+            UTLT_Assert(status == STATUS_OK, 
+					pthread_spin_unlock(&Self()->buffLock); return status, 
+					"UdpSendTo failed");
             BufblkClear(sendBuf);
 
             while (pthread_spin_unlock(&Self()->buffLock)) {
