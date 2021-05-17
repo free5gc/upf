@@ -25,23 +25,30 @@ int gtp_dev_destroy(const char *gtp_ifname);
 struct gtp5g_dev;
 struct gtp5g_pdr;
 struct gtp5g_far;
+struct gtp5g_qer;
 
 int gtp5g_add_pdr(int genl_id, struct mnl_socket *nl, struct gtp5g_dev *dev, struct gtp5g_pdr *pdr);
 int gtp5g_add_far(int genl_id, struct mnl_socket *nl, struct gtp5g_dev *dev, struct gtp5g_far *far);
+int gtp5g_add_qer(int genl_id, struct mnl_socket *nl, struct gtp5g_dev *dev, struct gtp5g_qer *qer);
 
 int gtp5g_mod_pdr(int genl_id, struct mnl_socket *nl, struct gtp5g_dev *dev, struct gtp5g_pdr *pdr);
 int gtp5g_mod_far(int genl_id, struct mnl_socket *nl, struct gtp5g_dev *dev, struct gtp5g_far *far);
+int gtp5g_mod_qer(int genl_id, struct mnl_socket *nl, struct gtp5g_dev *dev, struct gtp5g_qer *qer);
 
 int gtp5g_del_pdr(int genl_id, struct mnl_socket *nl, struct gtp5g_dev *dev, struct gtp5g_pdr *pdr);
 int gtp5g_del_far(int genl_id, struct mnl_socket *nl, struct gtp5g_dev *dev, struct gtp5g_far *far);
+int gtp5g_del_qer(int genl_id, struct mnl_socket *nl, struct gtp5g_dev *dev, struct gtp5g_qer *qer);
 
 int gtp5g_list_pdr(int genl_id, struct mnl_socket *nl);
 int gtp5g_list_far(int genl_id, struct mnl_socket *nl);
+int gtp5g_list_qer(int genl_id, struct mnl_socket *nl);
 
 void gtp5g_print_pdr(struct gtp5g_pdr *pdr);
 void gtp5g_print_far(struct gtp5g_far *far);
+void gtp5g_print_qer(struct gtp5g_qer *qer);
 
 struct gtp5g_pdr *gtp5g_pdr_find_by_id(int genl_id, struct mnl_socket *nl, struct gtp5g_dev *dev, struct gtp5g_pdr *pdr);
 struct gtp5g_far *gtp5g_far_find_by_id(int genl_id, struct mnl_socket *nl, struct gtp5g_dev *dev, struct gtp5g_far *far);
+struct gtp5g_qer *gtp5g_qer_find_by_id(int genl_id, struct mnl_socket *nl, struct gtp5g_dev *dev, struct gtp5g_qer *qer);
 
 #endif

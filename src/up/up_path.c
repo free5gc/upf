@@ -102,7 +102,7 @@ Status GtpHandleEchoRequest(Sock *sock, void *data) {
     if (gtpRespHrd.flags & 0x03) {
         Gtpv1OptHeader *opthrd = (void *)((uint8_t *) data + GTPV1_HEADER_LEN);
         Gtpv1OptHeader gtpOptHrd = {
-            ._seqNum = (gtpRespHrd.flags & 0x02) ? htons(ntohs(opthrd->_seqNum) + 1) : 0,
+            ._seqNum = (gtpRespHrd.flags & 0x02) ? htons(ntohs(opthrd->_seqNum)) : 0,
             .nPdnNum = (gtpRespHrd.flags & 0x01) ? opthrd->nPdnNum : 0,
         };
         BufblkBytes(optPkt, (void *) &gtpOptHrd, sizeof(gtpOptHrd));

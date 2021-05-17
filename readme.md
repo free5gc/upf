@@ -11,9 +11,9 @@ go get github.com/sirupsen/logrus
 
 Linux kernel module 5G GTP-U (Linux kernel version = 5.0.0-23-generic or version >= 5.4)
 ```bash
-git clone https://github.com/PrinzOwO/gtp5g.git
+git clone https://github.com/free5gc/gtp5g.git
 cd gtp5g
-git checkout v0.2.1
+git checkout v0.3.2
 make
 sudo make install
 ```

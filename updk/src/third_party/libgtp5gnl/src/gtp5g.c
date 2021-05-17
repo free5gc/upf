@@ -71,11 +71,15 @@ struct gtp5g_dev *gtp5g_dev_alloc(void)
 }
 EXPORT_SYMBOL(gtp5g_dev_alloc);
 
+/**
+ * PDR
+ * */
 gtp5g_struct_alloc_exp(pdr, struct gtp5g_pdr);
 gtp5g_struct_alloc_no_exp(pdi, struct gtp5g_pdi);
 gtp5g_struct_alloc_no_exp(precedence, uint32_t);
 gtp5g_struct_alloc_no_exp(pdr_outer_header_removal, uint8_t);
 gtp5g_struct_alloc_no_exp(pdr_far_id, uint32_t);
+gtp5g_struct_alloc_no_exp(pdr_qer_id, uint32_t);
 
 /* Not in 3GPP spec, just used for routing */
 gtp5g_struct_alloc_no_exp(role_addr_ipv4, struct in_addr);
@@ -92,14 +96,14 @@ static inline char *gtp5g_unix_sock_path_alloc(void)
 	return unix_sock_path;
 }
 
-gtp5g_struct_alloc_exp(far, struct gtp5g_far);
-gtp5g_struct_alloc_no_exp(forwarding_parameter, struct gtp5g_forwarding_parameter);
-
 /* Nest in PDI */ 
 gtp5g_struct_alloc_no_exp(pdi_ue_addr_ipv4, struct in_addr);
 gtp5g_struct_alloc_no_exp(pdi_local_f_teid, struct local_f_teid);
 gtp5g_struct_alloc_no_exp(pdi_sdf_filter, struct sdf_filter);
 
+/**
+ * SDF 
+ * */
 /* Nest in SDF Filter */
 gtp5g_struct_alloc_no_exp(sdf_filter_description, struct ip_filter_rule);
 gtp5g_struct_alloc_no_exp(sdf_filter_tos_traffic_class, uint16_t);
@@ -107,9 +111,20 @@ gtp5g_struct_alloc_no_exp(sdf_filter_security_param_idx, uint32_t);
 gtp5g_struct_alloc_no_exp(sdf_filter_flow_label, uint32_t);
 gtp5g_struct_alloc_no_exp(sdf_filter_id, uint32_t);
 
+/**
+ * FAR
+ * */
+gtp5g_struct_alloc_exp(far, struct gtp5g_far);
+gtp5g_struct_alloc_no_exp(forwarding_parameter, struct gtp5g_forwarding_parameter);
+
 /* Nest in Forwarding Parameter */
 gtp5g_struct_alloc_no_exp(outer_header_creation, struct gtp5g_outer_header_creation);
 gtp5g_struct_alloc_no_exp(forwarding_policy, struct gtp5g_forwarding_policy);
+
+/**
+ * QER
+ * */
+gtp5g_struct_alloc_exp(qer, struct gtp5g_qer);
 
 void gtp5g_dev_free(struct gtp5g_dev *dev)
 {
@@ -173,6 +188,9 @@ void gtp5g_pdr_free(struct gtp5g_pdr *pdr)
 
     if (pdr->far_id)
         free(pdr->far_id);
+
+    if (pdr->qer_id)
+        free(pdr->qer_id);
 
     /* Not in 3GPP spec, just used for routing */
     if (pdr->role_addr_ipv4)
@@ -241,6 +259,13 @@ static inline void far_id_may_alloc(struct gtp5g_pdr *pdr)
 {
     if (!pdr->far_id)
         pdr->far_id = gtp5g_pdr_far_id_alloc();
+}
+
+/* NOTE: gtp5g_struct_alloc_no_exp() */
+static inline void qer_id_may_alloc(struct gtp5g_pdr *pdr)
+{
+    if (!pdr->qer_id)
+        pdr->qer_id = gtp5g_pdr_qer_id_alloc();
 }
 
 static inline void ue_addr_ipv4_may_alloc(struct gtp5g_pdr *pdr)
@@ -396,9 +421,9 @@ void gtp5g_pdr_set_sdf_filter_description(struct gtp5g_pdr *pdr, const char *rul
 
     char reg_act[] = "(permit)";
     char reg_direction[] = "(in|out)";
-    char reg_proto[] = "(ip|[0-9]{1,3})";
-    char reg_src_ip_mask[] = "(any|assigned|[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}(/[0-9]{1,2})?)";
-    char reg_dest_ip_mask[] = "(any|assigned|[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}(/[0-9]{1,2})?)";
+    char reg_proto[] = "(ip|[0-9]{1,3}})";
+    char reg_src_ip_mask[] = "(any|assigned|[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}(/[0-9]{1,5})?)";
+    char reg_dest_ip_mask[] = "(any|assigned|[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}(/[0-9]{1,5})?)";
     char reg_port[] = "([ ][0-9]{1,5}([,-][0-9]{1,5})*)?";
 
     char reg[0xfff];
@@ -591,6 +616,12 @@ uint32_t *gtp5g_pdr_get_far_id(struct gtp5g_pdr *pdr)
 }
 EXPORT_SYMBOL(gtp5g_pdr_get_far_id);
 
+uint32_t *gtp5g_pdr_get_qer_id(struct gtp5g_pdr *pdr)
+{
+    return pdr->qer_id;
+}
+EXPORT_SYMBOL(gtp5g_pdr_get_qer_id);
+
 uint8_t *gtp5g_pdr_get_outer_header_removal(struct gtp5g_pdr *pdr)
 {
     return pdr->outer_hdr_removal;
@@ -715,3 +746,177 @@ uint16_t *gtp5g_far_get_related_pdr_list(struct gtp5g_far *far)
     return far->related_pdr_list;
 }
 EXPORT_SYMBOL(gtp5g_far_get_related_pdr_list);
+
+
+/* QER */
+
+/** 8.2.75 QER ID   
+ *	Octets5~8
+ *		-> QER ID Value
+ *			 => BIT8 of Octet5 indicate Dynamically allocated by the CP(BIT8=0) or
+ *				predefined in the UP(BIT8=1)
+ * */
+void gtp5g_qer_set_id(struct gtp5g_qer *qer, uint32_t id)
+{
+    qer->id = id;
+}
+EXPORT_SYMBOL(gtp5g_qer_set_id);
+
+/* 8.2.7 Gate Status
+ * 	Octet5 
+ *		-Spare(4bits)
+ *		-UL Gate(2bits)
+ *		-DL Gate(2bits)
+ * 	Value(Decimal):
+ *		0 - OPEN (Default UL & DL)
+ *		1 -	CLOSED
+ *	
+ * */
+void gtp5g_qer_set_gate_status(struct gtp5g_qer *qer, uint8_t ul_dl_gate)
+{
+    qer->ul_dl_gate = (ul_dl_gate & 0x0F);
+}
+EXPORT_SYMBOL(gtp5g_qer_set_gate_status);
+
+/* 8.2.8 MBR
+ * 	Octet5~9, 	UL MBR
+ * 	Octet10~14, DL MBR
+ *
+ * NOTE1: Encode as kilobits per second (1kbps = 1000bps) 
+ * NOTE2: The range of UL/DL MBR is specified in 3GPP TS 36.413 [10].
+ * NOTE3: The encoding is aligned on the encoding specified in 3GPP TS 29.274 [9]
+ * */
+void gtp5g_qer_set_mbr_uhigh(struct gtp5g_qer *qer, uint32_t high)
+{
+    qer->mbr.ul_high = high;
+}
+EXPORT_SYMBOL(gtp5g_qer_set_mbr_uhigh);
+
+void gtp5g_qer_set_mbr_ulow(struct gtp5g_qer *qer, uint8_t low)
+{
+    qer->mbr.ul_low = low;
+}
+EXPORT_SYMBOL(gtp5g_qer_set_mbr_ulow);
+
+void gtp5g_qer_set_mbr_dhigh(struct gtp5g_qer *qer, uint32_t high)
+{
+    qer->mbr.dl_high = high;
+}
+EXPORT_SYMBOL(gtp5g_qer_set_mbr_dhigh);
+
+void gtp5g_qer_set_mbr_dlow(struct gtp5g_qer *qer, uint8_t low)
+{
+    qer->mbr.dl_low = low;
+}
+EXPORT_SYMBOL(gtp5g_qer_set_mbr_dlow);
+
+/* 8.2.9 GBR
+ *
+ * */
+void gtp5g_qer_set_gbr_uhigh(struct gtp5g_qer *qer, uint32_t high)
+{
+    qer->gbr.ul_high = high;
+}
+EXPORT_SYMBOL(gtp5g_qer_set_gbr_uhigh);
+
+void gtp5g_qer_set_gbr_ulow(struct gtp5g_qer *qer, uint8_t low)
+{
+    qer->gbr.ul_low = low;
+}
+EXPORT_SYMBOL(gtp5g_qer_set_gbr_ulow);
+
+void gtp5g_qer_set_gbr_dhigh(struct gtp5g_qer *qer, uint32_t high)
+{
+    qer->gbr.dl_high = high;
+}
+EXPORT_SYMBOL(gtp5g_qer_set_gbr_dhigh);
+
+void gtp5g_qer_set_gbr_dlow(struct gtp5g_qer *qer, uint8_t low)
+{
+    qer->gbr.dl_low = low;
+}
+EXPORT_SYMBOL(gtp5g_qer_set_gbr_dlow);
+
+/* 8.2.10 QER Correlation ID
+ *
+ * */
+void gtp5g_qer_set_qer_corr_id(struct gtp5g_qer *qer, uint32_t qer_corr_id)
+{
+	qer->qer_corr_id = qer_corr_id;
+}
+EXPORT_SYMBOL(gtp5g_qer_set_qer_corr_id);
+
+/* 8.2.88 RQI
+ * 	Octet5:
+ *		-> Spare(7bits)
+ *		-> RQI (1bit)
+ *			0 - Deactivate Reflective QoS (Default)
+ *			1 - Activate Reflective QoS
+ * */
+void gtp5g_qer_set_rqi(struct gtp5g_qer *qer, uint8_t rqi)
+{
+	qer->rqi = rqi;
+}
+EXPORT_SYMBOL(gtp5g_qer_set_rqi);
+
+/* 8.2.89 QFI
+ *	-> It contains an QoS flow identifier identifying a QoS flow in a 5G 
+ *		system filter
+ * Octet5,
+ *		-> Spare (2bits)
+ *		-> QFI (6bits)
+ * */
+void gtp5g_qer_set_qfi(struct gtp5g_qer *qer, uint8_t qfi)
+{
+	qer->qfi = (qfi & 0x3F);
+}
+EXPORT_SYMBOL(gtp5g_qer_set_qfi);
+
+/* 8.2.116 Paging Policy Indicator (PPI)
+ *	-> Indicates a value for paging policy differentiation
+ * Octet5,
+ *		-> Spare (5bits)
+ *		-> PPI (3bits)
+ * */
+void gtp5g_qer_set_ppi(struct gtp5g_qer *qer, uint8_t ppi)
+{
+	qer->ppi = (ppi & 0x07);
+}
+EXPORT_SYMBOL(gtp5g_qer_set_ppi);
+
+/* 8.2.174 QER Control Indications
+ *	-> Indicates a value for paging policy differentiation
+ * Octet5,
+ *		-> Spare (7bits)
+ *		-> RCSR (1bit)
+ *			1 -> UP function SHALL report the rate control status when the
+ *				PFCP session released
+ *			0 -> UP function SHALL NOT report the rate control status when the
+ *				PFCP session released
+ *			 
+ * */
+void gtp5g_qer_set_rcsr(struct gtp5g_qer *qer, uint8_t rcsr)
+{
+	qer->rcsr = (rcsr & 0x01);
+}
+EXPORT_SYMBOL(gtp5g_qer_set_rcsr);
+
+void gtp5g_pdr_set_qer_id(struct gtp5g_pdr *pdr, uint32_t qer_id) {
+    qer_id_may_alloc(pdr);
+    *pdr->qer_id = qer_id;
+}
+EXPORT_SYMBOL(gtp5g_pdr_set_qer_id);
+
+uint32_t *gtp5g_qer_get_id(struct gtp5g_qer *qer)
+{
+    return &qer->id;
+}
+EXPORT_SYMBOL(gtp5g_qer_get_id);
+
+void gtp5g_qer_free(struct gtp5g_qer *qer)
+{
+	free(qer);
+}
+EXPORT_SYMBOL(gtp5g_qer_free);
+
+

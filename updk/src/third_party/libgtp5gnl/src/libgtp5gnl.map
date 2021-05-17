@@ -13,29 +13,37 @@ global:
 
   gtp5g_add_pdr;
   gtp5g_add_far;
+  gtp5g_add_qer;
 
   gtp5g_mod_pdr;
   gtp5g_mod_far;
+  gtp5g_mod_qer;
 
   gtp5g_del_pdr;
   gtp5g_del_far;
+  gtp5g_del_qer;
 
   gtp5g_list_pdr;
   gtp5g_list_far;
+  gtp5g_list_qer;
 
   gtp5g_print_pdr;
   gtp5g_print_far;
+  gtp5g_print_qer;
 
   gtp5g_pdr_find_by_id;
   gtp5g_far_find_by_id;
+  gtp5g_qer_find_by_id;
 
   gtp5g_dev_alloc;
   gtp5g_pdr_alloc;
   gtp5g_far_alloc;
+  gtp5g_qer_alloc;
 
   gtp5g_dev_free;
   gtp5g_pdr_free;
   gtp5g_far_free;
+  gtp5g_qer_free;
 
   gtp5g_dev_set_ifns;
   gtp5g_dev_set_ifidx;
@@ -44,6 +52,7 @@ global:
   gtp5g_pdr_set_precedence;
   gtp5g_pdr_set_outer_header_removal;
   gtp5g_pdr_set_far_id;
+  gtp5g_pdr_set_qer_id;
   gtp5g_pdr_set_role_addr_ipv4;
   gtp5g_pdr_set_unix_sock_path;
   gtp5g_pdr_set_ue_addr_ipv4;
@@ -57,6 +66,7 @@ global:
   gtp5g_pdr_get_id;
   gtp5g_pdr_get_precedence;
   gtp5g_pdr_get_far_id;
+  gtp5g_pdr_get_qer_id;
   gtp5g_pdr_get_outer_header_removal;
   gtp5g_pdr_get_ue_addr_ipv4;
   gtp5g_pdr_get_local_f_teid_teid;
@@ -77,6 +87,24 @@ global:
 
   gtp5g_far_get_related_pdr_num;
   gtp5g_far_get_related_pdr_list;
+
+  gtp5g_qer_set_id;
+  gtp5g_qer_set_gate_status;
+  gtp5g_qer_set_mbr_uhigh;
+  gtp5g_qer_set_mbr_ulow;
+  gtp5g_qer_set_mbr_dhigh;
+  gtp5g_qer_set_mbr_dlow;
+  gtp5g_qer_set_gbr_uhigh;
+  gtp5g_qer_set_gbr_ulow;
+  gtp5g_qer_set_gbr_dhigh;
+  gtp5g_qer_set_gbr_dlow;
+  gtp5g_qer_set_qer_corr_id;
+  gtp5g_qer_set_rqi;
+  gtp5g_qer_set_qfi;
+  gtp5g_qer_set_ppi;
+  gtp5g_qer_set_rcsr;
+
+  gtp5g_qer_get_id;
 
 local: *;
 };

@@ -14,6 +14,7 @@ libgtp5gnl_la_LDFLAGS = -Wl,--version-script=$(srcdir)/libgtp5gnl.map -version-i
 libgtp5gnl_la_SOURCES = genl.c		\
 		      gtp5g-genl-pdr.c  \
 		      gtp5g-genl-far.c  \
+		      gtp5g-genl-qer.c  \
 		      gtp5g-rtnl.c	\
 		      gtp5g.c		\
 		      libgtp5gnl.map

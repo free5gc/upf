@@ -56,11 +56,13 @@ void TimerListInit(TimerList *tmList) {
     memset(tmList, 0x00, sizeof(TimerList));
     ListHeadInit(&tmList->active);
     ListHeadInit(&tmList->idle);
+    pthread_mutex_init(&tmList->lock, 0);
     return;
 }
 
 // Check expire time and update active and idle list
 Status TimerExpireCheck(TimerList *tmList, uintptr_t data) {
+    pthread_mutex_lock(&tmList->lock);
     uint32_t curTime = TimeMsec(TimeNow());
     TimerBlk *tm = ListFirst(&(tmList->active));
 
@@ -86,12 +88,15 @@ Status TimerExpireCheck(TimerList *tmList, uintptr_t data) {
             break;
         }
     }
+    pthread_mutex_unlock(&tmList->lock);
     return STATUS_OK;
 }
 
 Status TimerStart(TimerBlkID id) {
-    uint32_t curTime = TimeMsec(TimeNow());
+
     TimerBlk *tm = (TimerBlk *)id;
+    pthread_mutex_lock(&tm->timerList->lock);
+    uint32_t curTime = TimeMsec(TimeNow());
 
      ListRemove(tm);
 
@@ -100,6 +105,7 @@ Status TimerStart(TimerBlkID id) {
     ListInsertSorted(tm, &(tm->timerList->active), TimerCmpFunc);
     
     tm->isRunning = 1;
+    pthread_mutex_unlock(&tm->timerList->lock);
 
     return STATUS_OK;
 }
@@ -107,6 +113,7 @@ Status TimerStart(TimerBlkID id) {
 Status TimerStop(TimerBlkID id) {
     TimerBlk *tm = (TimerBlk *)id;
 
+    pthread_mutex_lock(&tm->timerList->lock);
     if (tm->isRunning) {
         ListRemove(tm);
 
@@ -114,6 +121,7 @@ Status TimerStop(TimerBlkID id) {
 
         tm->isRunning = 0;
     }
+    pthread_mutex_unlock(&tm->timerList->lock);
 
     return STATUS_OK;
 }
@@ -126,6 +134,7 @@ TimerBlkID TimerCreate(TimerList *tmList, int type, uint32_t duration, ExpireFun
     
     memset((char*)tm, 0x00, sizeof(TimerBlk));
 
+    pthread_mutex_lock(&tmList->lock);
     tm->timerList = tmList;
 
     ListInsertSorted(tm, &(tm->timerList->idle), TimerCmpFunc);
@@ -133,14 +142,17 @@ TimerBlkID TimerCreate(TimerList *tmList, int type, uint32_t duration, ExpireFun
     tm->type = type;
     tm->duration = duration;
     tm->expireFunc = expireFunc;
+    pthread_mutex_unlock(&tmList->lock);
 
     return (TimerBlkID)tm;
 }
 
 void TimerDelete(TimerBlkID id) {
     TimerBlk *tm = (TimerBlk *)id;
+    pthread_mutex_lock(&tm->timerList->lock);
 
     ListRemove(tm);
+    pthread_mutex_unlock(&tm->timerList->lock);
     PoolFree(&timerPool, tm);
     
     return;

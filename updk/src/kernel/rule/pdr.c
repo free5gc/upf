@@ -207,6 +207,12 @@ int _SetGtp5gPdr(UpfPdr *upfPdr, UPDK_PDR *pdr) {
         UTLT_Debug("gtp5g set PDR FAR ID: %u", pdr->farId);
     }
 
+    if (pdr->flags.qerId) {
+        // TODO:
+        gtp5g_pdr_set_qer_id(upfPdr, pdr->qerId[0]);
+        UTLT_Debug("gtp5g set PDR QER ID: %u", pdr->qerId[0]);
+    }
+
     return 0;
 }
 
