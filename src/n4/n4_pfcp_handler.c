@@ -1175,7 +1175,7 @@ Status UpfN4HandleSessionEstablishmentRequest(UpfSession *session, PfcpXact *pfc
                 "N4 build error");
 
     status = PfcpXactUpdateTx(pfcpXact, &header, bufBlk);
-    UTLT_Assert(status == STATUS_OK, return STATUS_ERROR,
+    UTLT_Assert(status == STATUS_OK, BufblkFree(bufBlk); return STATUS_ERROR,
                 "pfcpXact update TX error");
 
     status = PfcpXactCommit(pfcpXact);
@@ -1305,7 +1305,7 @@ Status UpfN4HandleSessionModificationRequest(UpfSession *session, PfcpXact *xact
                 "N4 build error");
 
     status = PfcpXactUpdateTx(xact, &header, bufBlk);
-    UTLT_Assert(status == STATUS_OK, return STATUS_ERROR,
+    UTLT_Assert(status == STATUS_OK, BufblkFree(bufBlk); return STATUS_ERROR,
                 "PfcpXactUpdateTx error");
 
     status = PfcpXactCommit(xact);
@@ -1340,7 +1340,7 @@ Status UpfN4HandleSessionDeletionRequest(UpfSession *session, PfcpXact *xact,
     UTLT_Assert(status == STATUS_OK, return STATUS_ERROR, "N4 build error");
 
     status = PfcpXactUpdateTx(xact, &header, bufBlk);
-    UTLT_Assert(status == STATUS_OK, return STATUS_ERROR,
+    UTLT_Assert(status == STATUS_OK, BufblkFree(bufBlk); return STATUS_ERROR,
                 "PfcpXactUpdateTx error");
 
     status = PfcpXactCommit(xact);
@@ -1412,7 +1412,7 @@ Status UpfN4HandleAssociationSetupRequest(PfcpXact *xact,
                 "N4 build error");
 
     status = PfcpXactUpdateTx(xact, &header, bufBlk);
-    UTLT_Assert(status == STATUS_OK, return STATUS_ERROR,
+    UTLT_Assert(status == STATUS_OK, BufblkFree(bufBlk); return STATUS_ERROR,
                 "PfcpXactUpdateTx error");
 
     status = PfcpXactCommit(xact);
@@ -1466,7 +1466,7 @@ Status UpfN4HandleAssociationReleaseRequest(PfcpXact *xact,
                 "N4 build error");
 
     status = PfcpXactUpdateTx(xact, &header, bufBlk);
-    UTLT_Assert(status == STATUS_OK, return STATUS_ERROR,
+    UTLT_Assert(status == STATUS_OK, BufblkFree(bufBlk); return STATUS_ERROR,
                 "PfcpXactUpdateTx error");
 
     status = PfcpXactCommit(xact);
@@ -1494,7 +1494,7 @@ Status UpfN4HandleHeartbeatRequest(PfcpXact *xact, HeartbeatRequest *request) {
                 "N4 build error");
 
     status = PfcpXactUpdateTx(xact, &header, bufBlk);
-    UTLT_Assert(status == STATUS_OK, return STATUS_ERROR,
+    UTLT_Assert(status == STATUS_OK, BufblkFree(bufBlk); return STATUS_ERROR,
                 "PfcpXactUpdateTx error");
 
     status = PfcpXactCommit(xact);
