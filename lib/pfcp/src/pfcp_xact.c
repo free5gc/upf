@@ -346,7 +346,7 @@ Status PfcpXactUpdateTx(PfcpXact *xact, PfcpHeader *header, Bufblk *bufBlk) {
         headerLen = PFCP_HEADER_LEN - PFCP_SEID_LEN;
     }
 
-    fullPacket = BufblkAlloc(1, headerLen);
+    UTLT_Assert(fullPacket = BufblkAlloc(1, headerLen), return STATUS_ERROR, "buffer block alloc error");
     localHeader = fullPacket->buf;
     fullPacket->len = headerLen;
 
@@ -364,7 +364,7 @@ Status PfcpXactUpdateTx(PfcpXact *xact, PfcpHeader *header, Bufblk *bufBlk) {
 
     localHeader->length = htons(bufBlk->len + headerLen - 4);
 
-    BufblkBuf(fullPacket, bufBlk);
+    UTLT_Assert(BufblkBuf(fullPacket, bufBlk) == STATUS_OK, BufblkFree(fullPacket); return STATUS_ERROR, "buffer block buffering error");
     BufblkFree(bufBlk);
 
     xact->seq[xact->step].type = localHeader->type;

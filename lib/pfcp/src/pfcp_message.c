@@ -391,6 +391,7 @@ int _TlvBuildMessage(Bufblk **bufBlkPtr, void *msg, IeDescription *ieDescription
         //UTLT_Info("msgType: %d, msgLen: %d", ieDescription->msgType, ((TlvOctet *)msg)->len);
         int buffLen = sizeof(uint16_t) * 2 + ((TlvOctet *)msg)->len;
         *bufBlkPtr = BufblkAlloc(1, buffLen);
+        UTLT_Assert((*bufBlkPtr), return 0, "buffer block alloc error");
         uint16_t *tagPtr = (uint16_t *) ((*bufBlkPtr)->buf);
         uint16_t *lenPtr = &tagPtr[1];
 
@@ -403,6 +404,7 @@ int _TlvBuildMessage(Bufblk **bufBlkPtr, void *msg, IeDescription *ieDescription
         size_t idx;
         int msgPivot = 0;
         *bufBlkPtr = BufblkAlloc(1, sizeof(uint16_t) * 2);
+        UTLT_Assert((*bufBlkPtr), return 0, "buffer block alloc error");
         uint16_t *tagPtr = (*bufBlkPtr)->buf;
         uint16_t *lenPtr = &tagPtr[1];
         (*bufBlkPtr)->len = sizeof(uint16_t) * 2;
@@ -425,7 +427,10 @@ int _TlvBuildMessage(Bufblk **bufBlkPtr, void *msg, IeDescription *ieDescription
             if (dbf) {
                     UTLT_Warning("tmpBuf T: %u, L: %d", ntohs(((uint16_t *)tmpBufBlkPtr->buf)[0]), ntohs(((uint16_t *)tmpBufBlkPtr->buf)[1]));
             }
-            BufblkBuf(*bufBlkPtr, tmpBufBlkPtr);
+            UTLT_Assert(BufblkBuf(*bufBlkPtr, tmpBufBlkPtr) == STATUS_OK,
+                        BufblkFree(*bufBlkPtr); BufblkFree(tmpBufBlkPtr); return 0,
+                        "buffer block buffering error");
+
             //UTLT_Warning("bufBlk len %d", (*bufBlkPtr)->buf);
             BufblkFree(tmpBufBlkPtr);
             msgPivot += ieDescriptionTable[ieDescription->next[idx]].msgLen;
@@ -446,6 +451,7 @@ void _PfcpBuildBody(Bufblk **bufBlkPtr, void *msg, IeDescription *ieDescription)
     int idx;
     void *root = msg + sizeof(unsigned long);
     (*bufBlkPtr) = BufblkAlloc(1, 0);
+    UTLT_Assert((*bufBlkPtr), return, "buffer block alloc error");
     for (idx = 0; idx < ieDescription->numToParse; ++idx) {
         Bufblk *tmpBufBlkPtr;
         int rt = _TlvBuildMessage(&tmpBufBlkPtr, root, &ieDescriptionTable[ieDescription->next[idx]]);
@@ -453,7 +459,9 @@ void _PfcpBuildBody(Bufblk **bufBlkPtr, void *msg, IeDescription *ieDescription)
             root += ieDescriptionTable[ieDescription->next[idx]].msgLen;
             continue;
         }
-        BufblkBuf(*bufBlkPtr, tmpBufBlkPtr);
+        UTLT_Assert(BufblkBuf(*bufBlkPtr, tmpBufBlkPtr) == STATUS_OK,
+            BufblkFree(*bufBlkPtr); BufblkFree(tmpBufBlkPtr); return, "buffer block buffering error");
+
         BufblkFree(tmpBufBlkPtr);
         root += ieDescriptionTable[ieDescription->next[idx]].msgLen;
     }
@@ -535,6 +543,7 @@ Status PfcpBuildMessage(Bufblk **bufBlkPtr, PfcpMessage *pfcpMessage) {
         default:
             UTLT_Warning("Not implmented(type:%d)", &pfcpMessage->header.type);
     }
+    UTLT_Assert(*bufBlkPtr, status = STATUS_ERROR, "buffer block pointer error");
     return status;
 }
 
