@@ -48,7 +48,7 @@ static Status parseArgs(int argc, char *argv[]) {
                 break;
 
             case 'h':
-                printf("Usage: %s [-f CONFIG_PATH]", argv[0]);
+                printf("Usage: %s [-f CONFIG_PATH]\n", argv[0]);
                 exit(0);
             
             case '?':
