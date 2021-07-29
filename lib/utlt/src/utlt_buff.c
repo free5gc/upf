@@ -113,7 +113,7 @@ Status SelectBufblkOption(Bufblk *bufblk, int opt) {
     } else if (bufblk->size <= 65536) {
         BufblkOptionSelector(bufblk, 65536, opt);
     } else {
-        UTLT_Error("The size for Buffer block is too big : size[%d]", bufblk->size);
+        UTLT_Debug("The size for Buffer block is too big : size[%d]", bufblk->size);
         bufblk->size = bufblk->len = 0;
         return STATUS_ERROR;
     }
@@ -198,7 +198,7 @@ Bufblk *BufblkAlloc(uint32_t num, uint32_t size) {
 Status BufAlloc(Bufblk *bufblk, uint32_t num, uint32_t size) {
 
     bufblk->size = num * size;
-    UTLT_Assert(SelectBufblkOption(bufblk, BUF_ALLOC) == STATUS_OK, 
+    UTLT_Level_Assert(LOG_DEBUG, SelectBufblkOption(bufblk, BUF_ALLOC) == STATUS_OK,
                 return STATUS_ERROR, "");
 
     return STATUS_OK;
@@ -207,13 +207,13 @@ Status BufAlloc(Bufblk *bufblk, uint32_t num, uint32_t size) {
 Status BufblkResize(Bufblk *bufblk, uint32_t num, uint32_t size) {
     Bufblk tmpBufblk;
 
-    UTLT_Assert(BufAlloc(&tmpBufblk, num, size) == STATUS_OK, 
+    UTLT_Level_Assert(LOG_DEBUG, BufAlloc(&tmpBufblk, num, size) == STATUS_OK,
                 return STATUS_ERROR, "Buffer Resize fail"); 
     
     tmpBufblk.len = (bufblk->len > tmpBufblk.size ? tmpBufblk.size : bufblk->len);
     memcpy(tmpBufblk.buf, bufblk->buf, tmpBufblk.len);
 
-    UTLT_Assert(BufFree(bufblk) == STATUS_OK, 
+    UTLT_Level_Assert(LOG_DEBUG, BufFree(bufblk) == STATUS_OK,
                 BufFree(&tmpBufblk); return STATUS_ERROR, 
                 "Buffer Resize fail"); 
     
@@ -293,7 +293,7 @@ Status BufblkFmt(Bufblk *bufblk, const char *fmt, ...) {
 
 Status BufblkBytes(Bufblk *bufblk, const char *str, uint32_t size) {
     if (BufIsNotEnough(bufblk, 1, size)) {
-        UTLT_Assert(BufblkResize(bufblk, 1, bufblk->size + size) == STATUS_OK, return STATUS_ERROR, "");
+        UTLT_Level_Assert(LOG_DEBUG, BufblkResize(bufblk, 1, bufblk->size + size) == STATUS_OK, return STATUS_ERROR, "");
     }
     
     char *ptr = bufblk->buf;

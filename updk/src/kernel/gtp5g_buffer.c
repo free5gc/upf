@@ -26,7 +26,7 @@ Status UPDKBufferHandler(Sock *sock, void *data) {
     // Buffering packet only, packet should pass by UPF
     UPDK_PDR updkPDR;
     int packetInStatus = Gtp5gSelf()->PacketInL3(pktbuf->buf, pktbuf->len, &updkPDR);
-    UTLT_Assert(packetInStatus > 0, goto ERROR_AND_FREE, "Find Rule for buffering test failed");
+    UTLT_Level_Assert(LOG_DEBUG, packetInStatus > 0, goto ERROR_AND_FREE, "Find Rule for buffering test failed");
 
     /* TODO: Only for debug or demo, get related FAR and QER from UPF
     UPDK_FAR updkFAR;
