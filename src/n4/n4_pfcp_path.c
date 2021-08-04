@@ -58,7 +58,7 @@ static int _pfcpReceiveCB(Sock *sock, void *data) {
 
             // TODO: check noIpv4, noIpv6, preferIpv4, originally from context.no_ipv4
             upf = PfcpAddNodeWithSeid(&Self()->upfN4List, &fSeid,
-                    Self()->pfcpPort, 0, 1, 0);
+                    Self()->pfcpPort, 0, 1, 1);
             if (!upf) {
                 // if upf == NULL (allocate error)
                 // Count size of upfN4List
