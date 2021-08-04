@@ -182,9 +182,8 @@ void PfcpXactDeassociate(PfcpXact *xact1, PfcpXact *xact2) {
 }
 
 Status PfcpXactDelete(PfcpXact *xact) {
-
-    UTLT_Assert(xact, , "xact error");
-    UTLT_Assert(xact->gnode, , "node of xact error");
+    UTLT_Level_Assert(LOG_WARNING, xact, return STATUS_ERROR, "xact error");
+    UTLT_Level_Assert(LOG_WARNING, xact->gnode, return STATUS_ERROR, "node of xact error");
 
     UTLT_Trace("[%d] %s Delete  peer [%s]:%d\n", xact->transactionId,
             xact->origin == PFCP_LOCAL_ORIGINATOR ? "local" : "remote",
