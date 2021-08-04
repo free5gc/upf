@@ -158,20 +158,20 @@ Status Gtp5gDeviceAdd(VirtualDevice *dev, VirtualPort *port) {
     int ioctlSock = socket(AF_INET, SOCK_DGRAM, IPPROTO_IP);
     status = ioctl(ioctlSock, SIOCSIFMTU, (caddr_t)&ifr);
     close(ioctlSock); 
-    UTLT_Assert(status == 0, goto FREEGPT5GINT,
+    UTLT_Assert(status == 0, goto FREEGTP5GINT,
         "Set MTU %d on %s failed", ifr.ifr_mtu, dev->deviceID);
 
     UTLT_Assert(SockRegister(gtp5gDevice.sock, UPDKGtpHandler, NULL) == STATUS_OK,
         return STATUS_ERROR, "SockRegister failed");
 
     UTLT_Assert(EpollRegisterEvent(gtp5gDevice.epfd, gtp5gDevice.sock) == STATUS_OK,
-        goto FREEGPT5GINT, "UPDK epoll register error");
+        goto FREEGTP5GINT, "UPDK epoll register error");
 
-    UTLT_Assert(BufferServerInit() == STATUS_OK, goto FREEGPT5GINT, "BufferServerInit failed");
+    UTLT_Assert(BufferServerInit() == STATUS_OK, goto FREEGTP5GINT, "BufferServerInit failed");
 
     return STATUS_OK;
 
-FREEGPT5GINT:
+FREEGTP5GINT:
     gtp_dev_destroy(gtp5gDevice.ifname);
 FREEUDPSOCK:
     UdpFree(gtp5gDevice.sock);
