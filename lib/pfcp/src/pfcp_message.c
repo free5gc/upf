@@ -196,7 +196,7 @@ int _TlvParseMessage(void * msg, IeDescription * msgDes, void * buff, int buffLe
     //void *root = buff;
     int buffOffset = 0; // buff offset
     int idx;
-    for (idx = 0; idx < msgDes->numToParse; ++idx) {
+    for (idx = 0; idx < msgDes->numToParse && buffOffset < buffLen; ++idx) {
         if (dbf) { if (ieDescriptionTable[msgDes->next[idx]].msgType == 57) {
                 UTLT_Warning("Get F-SEID");
             } }
@@ -216,26 +216,25 @@ int _TlvParseMessage(void * msg, IeDescription * msgDes, void * buff, int buffLe
             continue;
         }
 
+        buffOffset += sizeof(type) + sizeof(length);
         if (ieDes->isTlvObj) {
             if (dbf) { UTLT_Info("is TLV: %p", msg+msgPivot); }
             ((TlvOctet*)(msg+msgPivot))->presence = 1;
             ((TlvOctet*)(msg+msgPivot))->type = type;
             void *newBuf = UTLT_Malloc(length);
-            memcpy(newBuf, buff + buffOffset + 2*sizeof(uint16_t), length);
+            memcpy(newBuf, buff + buffOffset, length);
             ((TlvOctet*)(msg+msgPivot))->len = length;
             ((TlvOctet*)(msg+msgPivot))->value = newBuf;
-            buffOffset += sizeof(uint16_t)*2 + length;
             msgPivot += sizeof(TlvOctet);
-            continue;
         } else {
             if (dbf) { UTLT_Info("not TLV, desTB mstype: %d", ieDes->msgType); }
             // recursive
             *((unsigned long*)(msg+msgPivot)) = 1; // presence
-            _TlvParseMessage(msg+msgPivot+sizeof(unsigned long), ieDes, buff + buffOffset + sizeof(uint16_t)*2, buffLen - buffOffset);
+            _TlvParseMessage(msg+msgPivot+sizeof(unsigned long), ieDes, buff + buffOffset, length);
             //int size = _TlvParseMessage(msg+msgPivot, ieDes, buff + buffOffset, buffLen - buffOffset);
-            buffOffset += length + sizeof(uint16_t)*2;
             msgPivot += ieDes->msgLen;
         }
+        buffOffset += length;
     }
     return buffOffset;
 }
