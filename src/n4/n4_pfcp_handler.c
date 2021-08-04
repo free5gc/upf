@@ -167,7 +167,7 @@ Status _ConvertCreatePDRTlvToRule(UpfPDR *upfPdr, CreatePDR *createPdr) {
                     idx += 3;
 
                     UTLT_Debug("SDF Filter Flow Label: %c%c%c",
-                        updkSdfFilter->flowLabel[0], updkSdfFilter->flowLabel[2], updkSdfFilter->flowLabel[3]);
+                        updkSdfFilter->flowLabel[0], updkSdfFilter->flowLabel[1], updkSdfFilter->flowLabel[2]);
                 } else if (des->bid) {
                     updkSdfFilter->sdfFilterId = ntohl(*(uint32_t*)((uint8_t*)createPdr->pDI.sDFFilter.value+idx));
                     UTLT_Debug("SDF Filter SDF Filter Id: %u", updkSdfFilter->sdfFilterId);
@@ -639,7 +639,7 @@ Status _ConvertUpdatePDRTlvToRule(UpfPDR *upfPdr, UpdatePDR *updatePDR) {
                     idx += 3;
 
                     UTLT_Debug("SDF Filter Flow Label: %c%c%c",
-                        updkSdfFilter->flowLabel[0], updkSdfFilter->flowLabel[2], updkSdfFilter->flowLabel[3]);
+                        updkSdfFilter->flowLabel[0], updkSdfFilter->flowLabel[1], updkSdfFilter->flowLabel[2]);
                 } else if (des->bid) {
                     updkSdfFilter->sdfFilterId = ntohl(*(uint32_t*)((uint8_t*)updatePDR->pDI.sDFFilter.value+idx));
                     UTLT_Debug("SDF Filter SDF Filter Id: %u", updkSdfFilter->sdfFilterId);
