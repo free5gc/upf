@@ -98,10 +98,8 @@ PfcpXact *PfcpXactLocalCreate(PfcpNode *gnode, PfcpHeader *header, Bufblk *bufBl
     */
 
     if (xact->origin == PFCP_LOCAL_ORIGINATOR) {
-        ListHeadInit(&xact->gnode->localList);
         ListInsert(xact, &xact->gnode->localList);
     } else {
-        ListHeadInit(&xact->gnode->remoteList);
         ListInsert(xact, &xact->gnode->remoteList);
     }
 
