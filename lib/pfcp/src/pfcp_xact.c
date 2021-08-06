@@ -30,7 +30,7 @@ static int pfcpXactInitialized = 0; // if xact exist
 static TimerList *globalTimerList = NULL;
 static uintptr_t globalResponseEvent = 0;
 static uintptr_t globalHoldingEvent = 0;
-uint32_t globalXactId = 0;
+static uint32_t globalXactId = 0;
 
 IndexDeclare(pfcpXactPool, PfcpXact, SIZE_OF_PFCP_XACT_POOL);
 
