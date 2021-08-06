@@ -30,7 +30,7 @@ static int pfcpXactInitialized = 0; // if xact exist
 static TimerList *globalTimerList = NULL;
 static uintptr_t globalResponseEvent = 0;
 static uintptr_t globalHoldingEvent = 0;
-static uint32_t globalXactId = 0;
+uint32_t globalXactId = 0;
 
 IndexDeclare(pfcpXactPool, PfcpXact, SIZE_OF_PFCP_XACT_POOL);
 
@@ -38,7 +38,7 @@ Status PfcpXactInit(TimerList *timerList, uintptr_t responseEvent, uintptr_t hol
     UTLT_Assert(pfcpXactInitialized == 0, return STATUS_ERROR, "PFCP Xact have alread initialized");
     IndexInit(&pfcpXactPool, SIZE_OF_PFCP_XACT_POOL);
 
-    globalXactId = 0;
+    globalXactId = 1;
     globalTimerList = timerList;
     globalResponseEvent = responseEvent;
     globalHoldingEvent = holdingEvent;
@@ -79,9 +79,11 @@ PfcpXact *PfcpXactLocalCreate(PfcpNode *gnode, PfcpHeader *header, Bufblk *bufBl
     UTLT_Assert(xact, return NULL, "Transaction allocation failed");
 
     xact->origin = PFCP_LOCAL_ORIGINATOR;
-    xact->transactionId = (globalXactId = (globalXactId == PFCP_MAX_XACT_ID ? PFCP_MIN_XACT_ID : ++globalXactId));
-
     xact->gnode = gnode;
+    if (globalXactId >= PFCP_MAX_XACT_ID)
+        globalXactId = PFCP_MIN_XACT_ID;
+    xact->transactionId = globalXactId++;
+
     /*TODO: fix this
     if (globalResponseEvent) {
         xact->timerResponse = EventTimerCreate(globalTimerList, TIMER_TYPE_ONCE, PFCP_T3_RESPONSE_DURATION);
