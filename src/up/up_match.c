@@ -398,15 +398,12 @@ static int PacketInBufferHandle(uint8_t *pkt, uint16_t pktlen, UPDK_PDR *matched
             // if packetBuffer null, allocate space
             // reuse the pktbuf, so don't free it
             packetStorage->packetBuffer = BufblkAlloc(1, MAX_SIZE_OF_PACKET);
-            UTLT_Assert(packetStorage->packetBuffer,
-                pthread_spin_unlock(&Self()->buffLock); goto unlockErrorReturn, 
-                "UpfBufPacket alloc failed");
+            UTLT_Assert(packetStorage->packetBuffer, goto unlockErrorReturn, "UpfBufPacket alloc failed");
         }
 
         // if packetBuffer not null, just add packet followed
         status = BufblkBytes(packetStorage->packetBuffer, (const char *) pkt, pktlen);
-        UTLT_Level_Assert(LOG_DEBUG, status == STATUS_OK,
-            pthread_spin_unlock(&Self()->buffLock); goto unlockErrorReturn,
+        UTLT_Level_Assert(LOG_DEBUG, status == STATUS_OK, goto unlockErrorReturn,
             "block add behand old buffer error");
 
         while (pthread_spin_unlock(&Self()->buffLock)) {
