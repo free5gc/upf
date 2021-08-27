@@ -38,6 +38,7 @@ Status BufblkFmt(Bufblk *bufblk, const char *fmt, ...)
         __attribute__((format(printf, 2, 3)));
 Status BufblkBytes(Bufblk *bufblk, const char *str, uint32_t size);
 Status BufblkAppend(Bufblk *bufblk, uint32_t num, uint32_t size);
+int BufIsNotEnough(Bufblk *bufblk, uint32_t num, uint32_t size);
 
 void *UTLT_Malloc(uint32_t size);
 void *UTLT_Calloc(uint32_t num, uint32_t size);

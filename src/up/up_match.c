@@ -403,7 +403,13 @@ static int PacketInBufferHandle(uint8_t *pkt, uint16_t pktlen, UPDK_PDR *matched
                 "UpfBufPacket alloc failed");
         }
 
+        if (BufIsNotEnough(packetStorage->packetBuffer, 1, sizeof(pktlen) + pktlen)) {
+            UTLT_Level_Assert(LOG_DEBUG, BufblkResize(packetStorage->packetBuffer, 1, packetStorage->packetBuffer->size + sizeof(pktlen) + pktlen) == STATUS_OK,
+            goto unlockErrorReturn, "block add behind old buffer error");
+        }
+
         // if packetBuffer not null, just add packet followed
+        BufblkBytes(packetStorage->packetBuffer, (const char *)&pktlen, sizeof(pktlen));
         status = BufblkBytes(packetStorage->packetBuffer, (const char *) pkt, pktlen);
         UTLT_Level_Assert(LOG_DEBUG, status == STATUS_OK,
             pthread_spin_unlock(&Self()->buffLock); goto unlockErrorReturn,

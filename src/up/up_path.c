@@ -191,21 +191,30 @@ Status UpSendPacketByPdrFar(UpfPDR *pdr, UpfFAR *far, Sock *sock) {
                         return STATUS_ERROR, "spin lock buffLock error");
 
             Bufblk *sendBuf = BufblkAlloc(1, 0x40);
-            gtpHdr._length = htons(bufStorage->packetBuffer->len);
-            BufblkBytes(sendBuf, (void*)&gtpHdr, GTPV1_HEADER_LEN);
-            BufblkBuf(sendBuf, bufStorage->packetBuffer);
+            Bufblk *pktBuf = bufStorage->packetBuffer;
+            uint16_t pktlen;
+            for (void *pktDataPtr = pktBuf->buf; pktDataPtr < pktBuf->buf + pktBuf->len; pktDataPtr += pktlen) {
+                pktlen = *(uint16_t *)pktDataPtr;
+                pktDataPtr += sizeof(pktlen);
+                gtpHdr._length = htons(pktlen);
+                BufblkBytes(sendBuf, (void *)&gtpHdr, GTPV1_HEADER_LEN);
+                BufblkBytes(sendBuf, pktDataPtr, pktlen);
+                UTLT_Level_Assert(LOG_DEBUG, UdpSendTo(sock, sendBuf->buf, sendBuf->len) == STATUS_OK, , "UdpSendTo failed");
+                BufblkClear(sendBuf);
+            }
 
-            status = UdpSendTo(sock, sendBuf->buf, sendBuf->len);
-            UTLT_Assert(status == STATUS_OK, 
-					pthread_spin_unlock(&Self()->buffLock); return status, 
-					"UdpSendTo failed");
-            BufblkClear(sendBuf);
+            BufblkFree(sendBuf);
+
+            status = BufblkFree(bufStorage->packetBuffer);
+            if (status == STATUS_OK)
+                bufStorage->packetBuffer = NULL;
+            else
+                UTLT_Error("Free packet buffer failed");
 
             while (pthread_spin_unlock(&Self()->buffLock)) {
                 // if unlock failed, keep trying
                 UTLT_Error("spin unlock error");
             }
-            status = BufblkFree(bufStorage->packetBuffer);
         } else {
             UTLT_Debug("bufStorage is NULL");
         }
