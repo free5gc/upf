@@ -66,7 +66,6 @@ Status SelectBufblkOption(Bufblk *bufblk, int opt);
 Status BufAlloc(Bufblk *bufblk, uint32_t num, uint32_t size);
 Status BufFree(Bufblk *bufblk);
 
-int BufIsNotEnough(Bufblk *bufblk, uint32_t num, uint32_t size);
 
 #define BUF_ALLOC 1
 #define BUF_FREE  2
