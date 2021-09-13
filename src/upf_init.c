@@ -233,7 +233,7 @@ static Status EpollTerm(void *data) {
 }
 
 static Status EventQueueInit(void *data) {
-    Self()->eventQ = EventQueueCreate(O_RDWR);
+    Self()->eventQ = EventQueueCreate(O_RDWR | O_NONBLOCK);
     UTLT_Assert(Self()->eventQ > 0, return STATUS_ERROR, "");
 
     return STATUS_OK;
