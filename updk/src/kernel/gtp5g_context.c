@@ -63,6 +63,7 @@ Status UPDKGtpHandler(Sock *sock, void *data) {
     Status status = STATUS_OK;
 
     Bufblk *pktbuf = BufblkAlloc(1, MAX_OF_GTPV1_PACKET_SIZE);
+    UTLT_Assert(pktbuf, return STATUS_ERROR, "create buffer error");
     int readNum = GtpRecv(sock, pktbuf);
     UTLT_Assert(readNum >= 0, status = STATUS_ERROR; goto FREEBUFBLK, "GTP receive fail");
 

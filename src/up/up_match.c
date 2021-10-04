@@ -402,15 +402,14 @@ static int PacketInBufferHandle(uint8_t *pkt, uint16_t pktlen, UPDK_PDR *matched
         }
 
         if (BufIsNotEnough(packetStorage->packetBuffer, 1, sizeof(pktlen) + pktlen)) {
-            UTLT_Level_Assert(LOG_DEBUG, BufblkResize(packetStorage->packetBuffer, 1, packetStorage->packetBuffer->size + sizeof(pktlen) + pktlen) == STATUS_OK,
-            goto unlockErrorReturn, "block add behind old buffer error");
+            UTLT_Level_Assert(LOG_DEBUG,
+                              BufblkResize(packetStorage->packetBuffer, 1, packetStorage->packetBuffer->size + sizeof(pktlen) + pktlen) == STATUS_OK,
+                              goto unlockErrorReturn, "block add behind old buffer error");
         }
 
         // if packetBuffer not null, just add packet followed
         BufblkBytes(packetStorage->packetBuffer, (const char *)&pktlen, sizeof(pktlen));
-        status = BufblkBytes(packetStorage->packetBuffer, (const char *) pkt, pktlen);
-        UTLT_Level_Assert(LOG_DEBUG, status == STATUS_OK, goto unlockErrorReturn,
-            "block add behand old buffer error");
+        BufblkBytes(packetStorage->packetBuffer, (const char *)pkt, pktlen);
 
         while (pthread_spin_unlock(&Self()->buffLock)) {
             // if unlock failed, keep trying
@@ -428,16 +427,17 @@ static int PacketInBufferHandle(uint8_t *pkt, uint16_t pktlen, UPDK_PDR *matched
         }
 
         return 1;
+
+    unlockErrorReturn:
+        while (pthread_spin_unlock(&Self()->buffLock)) {
+            // if unlock failed, keep trying
+            UTLT_Error("spin unlock error");
+        }
+
+        return -1;
     }
 
     return 0;
-
-unlockErrorReturn:
-    while (pthread_spin_unlock(&Self()->buffLock)) {
-        // if unlock failed, keep trying
-        UTLT_Error("spin unlock error");
-    }
-    return -1;
 }
 
 int PacketInWithL3(uint8_t *pkt, uint16_t pktlen, void *matchedPDR) {

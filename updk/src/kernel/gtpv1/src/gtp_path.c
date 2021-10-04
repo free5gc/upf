@@ -242,12 +242,16 @@ Status GtpBuildEchoRequest(Bufblk *pktbuf, int teid, int seq) {
         ._length = htons(GTPV1_OPT_HEADER_LEN),
         ._teid = htonl(teid),
     };
-    BufblkBytes(pktbuf, (void *) &gtpEchoReqHdr, GTPV1_HEADER_LEN);
+    UTLT_Level_Assert(LOG_DEBUG, BufblkBytes(pktbuf, (void *) &gtpEchoReqHdr, GTPV1_HEADER_LEN) == STATUS_OK,
+                      return STATUS_ERROR,
+                      "block add behand old buffer error");
 
     Gtpv1OptHeader gtpOptHdr = {
         ._seqNum = htons(seq),
     };
-    BufblkBytes(pktbuf, (void *) &gtpOptHdr, GTPV1_OPT_HEADER_LEN);
+    UTLT_Level_Assert(LOG_DEBUG, BufblkBytes(pktbuf, (void *) &gtpOptHdr, GTPV1_OPT_HEADER_LEN) == STATUS_OK,
+                      return STATUS_ERROR,
+                      "block add behand old buffer error");
 
     return STATUS_OK;
 }
@@ -260,7 +264,9 @@ Status GtpBuildEndMark(Bufblk *pktbuf, int teid) {
         .type = GTPV1_END_MARK,
         ._teid = htonl(teid),
     };
-    BufblkBytes(pktbuf, (void *) &gtpEndMarkHdr, GTPV1_HEADER_LEN);
+    UTLT_Level_Assert(LOG_DEBUG, BufblkBytes(pktbuf, (void *) &gtpEndMarkHdr, GTPV1_HEADER_LEN) == STATUS_OK,
+                      return STATUS_ERROR,
+                      "block add behand old buffer error");
 
     return STATUS_OK;
 }

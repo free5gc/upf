@@ -45,6 +45,7 @@ Status GtpHandler(Sock *sock, void *data) {
     Status status = STATUS_ERROR;
 
     Bufblk *pktbuf = BufblkAlloc(1, MAX_OF_GTPV1_PACKET_SIZE);
+    UTLT_Assert(pktbuf, return STATUS_ERROR, "create buffer error");
     int readNum = GtpRecv(sock, pktbuf);
     UTLT_Assert(readNum >= 0, goto FREEBUFBLK, "GTP receive fail");
 
@@ -93,30 +94,32 @@ Status GtpHandleEchoRequest(Sock *sock, void *data) {
     Status status = STATUS_OK;
 
     // Build the Echo Response packet
-    Gtpv1Header gtpRespHrd = {
+    Gtpv1Header gtpRespHdr = {
         .flags = 0x30 + (gtpHdr->flags & 0x03),
         .type = GTPV1_ECHO_RESPONSE,
     };
 
-    Bufblk *optPkt = BufblkAlloc(1, 0x40);
-    if (gtpRespHrd.flags & 0x03) {
-        Gtpv1OptHeader *opthrd = (void *)((uint8_t *) data + GTPV1_HEADER_LEN);
-        Gtpv1OptHeader gtpOptHrd = {
-            ._seqNum = (gtpRespHrd.flags & 0x02) ? htons(ntohs(opthrd->_seqNum)) : 0,
-            .nPdnNum = (gtpRespHrd.flags & 0x01) ? opthrd->nPdnNum : 0,
+    Bufblk *optPkt = BufblkAlloc(1, GTPV1_OPT_HEADER_LEN + sizeof(uint8_t)*2);
+    UTLT_Assert(optPkt, return STATUS_ERROR, "buffer block alloc error");
+    if (gtpRespHdr.flags & 0x03) {
+        Gtpv1OptHeader *opthdr = (void *)((uint8_t *) data + GTPV1_HEADER_LEN);
+        Gtpv1OptHeader gtpOptHdr = {
+            ._seqNum = (gtpRespHdr.flags & 0x02) ? htons(ntohs(opthdr->_seqNum) + 1) : 0,
+            .nPdnNum = (gtpRespHdr.flags & 0x01) ? opthdr->nPdnNum : 0,
         };
-        BufblkBytes(optPkt, (void *) &gtpOptHrd, sizeof(gtpOptHrd));
+        BufblkBytes(optPkt, (void *)&gtpOptHdr, GTPV1_OPT_HEADER_LEN);
     }
 
     /* Recover IE */
     uint8_t recoverType = 14, recoverCnt = 0;
-    BufblkBytes(optPkt, (void *) &recoverType, 1);
-    BufblkBytes(optPkt, (void *) &recoverCnt, 1);
+    BufblkBytes(optPkt, (void *)&recoverType, sizeof(recoverType));
+    BufblkBytes(optPkt, (void *)&recoverCnt, sizeof(recoverCnt));
 
-    gtpRespHrd._length = htons(optPkt->len);
+    gtpRespHdr._length = htons(optPkt->len);
 
-    Bufblk *pkt = BufblkAlloc(1, 0x40);
-    BufblkBytes(pkt, (void *) &gtpRespHrd, GTPV1_HEADER_LEN);
+    Bufblk *pkt = BufblkAlloc(1, GTPV1_HEADER_LEN + optPkt->len);
+    UTLT_Assert(pkt, BufblkFree(optPkt); return STATUS_ERROR, "buffer block alloc error");
+    BufblkBytes(pkt, (void *)&gtpRespHdr, GTPV1_HEADER_LEN);
     BufblkBuf(pkt, optPkt);
 
     BufblkFree(optPkt);
@@ -190,23 +193,28 @@ Status UpSendPacketByPdrFar(UpfPDR *pdr, UpfFAR *far, Sock *sock) {
             UTLT_Assert(!pthread_spin_lock(&Self()->buffLock),
                         return STATUS_ERROR, "spin lock buffLock error");
 
-            Bufblk *sendBuf = BufblkAlloc(1, 0x40);
+            Bufblk *sendBuf = BufblkAlloc(1, GTPV1_HEADER_LEN);
+            UTLT_Assert(sendBuf, status = STATUS_ERROR; goto FREEBUFBLK, "create buffer error");
             Bufblk *pktBuf = bufStorage->packetBuffer;
             uint16_t pktlen;
             for (void *pktDataPtr = pktBuf->buf; pktDataPtr < pktBuf->buf + pktBuf->len; pktDataPtr += pktlen) {
                 pktlen = *(uint16_t *)pktDataPtr;
-                pktDataPtr += sizeof(pktlen);
                 gtpHdr._length = htons(pktlen);
-                BufblkBytes(sendBuf, (void *)&gtpHdr, GTPV1_HEADER_LEN);
-                BufblkBytes(sendBuf, pktDataPtr, pktlen);
+                BufblkBytes(sendBuf, (void *)&gtpHdr, GTPV1_HEADER_LEN); // This must succeed
+
+                pktDataPtr += sizeof(pktlen);
+                status = BufblkBytes(sendBuf, pktDataPtr, pktlen);
+                UTLT_Level_Assert(LOG_DEBUG, status == STATUS_OK, BufblkFree(sendBuf); goto FREEBUFBLK,
+                                  "block add behand old buffer error");
+
                 UTLT_Level_Assert(LOG_DEBUG, UdpSendTo(sock, sendBuf->buf, sendBuf->len) == STATUS_OK, , "UdpSendTo failed");
                 BufblkClear(sendBuf);
             }
 
             BufblkFree(sendBuf);
 
-            status = BufblkFree(bufStorage->packetBuffer);
-            if (status == STATUS_OK)
+        FREEBUFBLK:
+            if (BufblkFree(bufStorage->packetBuffer) == STATUS_OK)
                 bufStorage->packetBuffer = NULL;
             else
                 UTLT_Error("Free packet buffer failed");
