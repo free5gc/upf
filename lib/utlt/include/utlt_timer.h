@@ -33,7 +33,7 @@ typedef struct _TimerList {
 
 typedef uintptr_t TimerBlkID;
 
-typedef void (*ExpireFunc)(uintptr_t data, uintptr_t param[]);
+typedef Status (*ExpireFunc)(uintptr_t data, uintptr_t param[]);
 
 Status TimerPoolInit();
 Status TimerFinal();

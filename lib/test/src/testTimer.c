@@ -23,10 +23,12 @@ TestTimerEliment timerEliment[] ={
     {TIMER_TYPE_ONCE, 130}
 };
 
-void TestExpireFunc(uintptr_t data, uintptr_t param[]) {
+Status TestExpireFunc(uintptr_t data, uintptr_t param[]) {
     uint32_t index = param[1];
 
     expireCheck[index]++;
+
+    return STATUS_OK;
 }
 
 Status TestTimer_1() {

@@ -62,32 +62,30 @@ void TimerListInit(TimerList *tmList) {
 
 // Check expire time and update active and idle list
 Status TimerExpireCheck(TimerList *tmList, uintptr_t data) {
-    pthread_mutex_lock(&tmList->lock);
+
     uint32_t curTime = TimeMsec(TimeNow());
-    TimerBlk *tm = ListFirst(&(tmList->active));
-
-    while (tm != (TimerBlk *)&tmList->active) {
+    TimerBlk *tm, *next;
+    pthread_mutex_lock(&tmList->lock);
+    ListForEachSafe(tm, next, &tmList->active) {
         if (tm->expireTime < curTime) {
-            tm->expireFunc(data, tm->param);
-            
-            if (tm->isRunning) {
-                ListRemove(tm);
-
-                if (tm->type == TIMER_TYPE_PERIOD) {
-                    tm->expireTime = curTime + tm->duration;
-                    
-                    ListInsertSorted(tm, &(tmList->active), TimerCmpFunc);
-                } else {
-                    ListInsertSorted(tm, &(tmList->idle), TimerCmpFunc);
-                    
-                    tm->isRunning = 0;
-                }
+            Status status = tm->expireFunc(data, tm->param);
+            if (status != STATUS_OK) {
+                UTLT_Assert(status == STATUS_EAGAIN, , "Timer expire func fail: %d", status);
+                continue;
             }
-            tm = ListFirst(&(tmList->active));
-        } else {
+            ListRemove(tm);
+            if (tm->type == TIMER_TYPE_PERIOD) {
+                tm->expireTime = curTime + tm->duration;
+                tm->isRunning = 1;
+                ListInsertSorted(tm, &(tmList->active), TimerCmpFunc);
+            } else {
+                tm->isRunning = 0;
+                ListInsertSorted(tm, &(tmList->idle), TimerCmpFunc);
+            }
+        } else
             break;
-        }
     }
+
     pthread_mutex_unlock(&tmList->lock);
     return STATUS_OK;
 }
