@@ -18,6 +18,7 @@ Status UPDKBufferHandler(Sock *sock, void *data) {
     uint16_t pdrId;
 
     Bufblk *pktbuf = BufblkAlloc(1, MAX_OF_BUFFER_PACKET_SIZE);
+    UTLT_Assert(pktbuf, return STATUS_ERROR, "create buffer error");
 
     // BufferRecv return -1 if error
     int readNum = BufferRecv(sock, pktbuf, &pdrId, &farAction);
