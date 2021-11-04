@@ -2,6 +2,7 @@
 
 #include <string.h>
 #include <stdio.h>
+#include <stdbool.h>
 
 #include "utlt_debug.h"
 #include "utlt_pool.h"
@@ -62,26 +63,25 @@ void TimerListInit(TimerList *tmList) {
 
 // Check expire time and update active and idle list
 Status TimerExpireCheck(TimerList *tmList, uintptr_t data) {
+    TimerBlk *tm, *next;
+    TimerBlk *expiredList[64 + 1]; // it must be larger than SIZE_OF_PFCP_XACT_POOL(64)
+    int i = 0;
     pthread_mutex_lock(&tmList->lock);
     uint32_t curTime = TimeMsec(TimeNow());
-    TimerBlk *tm = ListFirst(&(tmList->active));
 
-    while (tm != (TimerBlk *)&tmList->active) {
+    // pick up expired timers
+
+    ListForEachSafe(tm, next, &(tmList->active)) {
         if (tm->expireTime < curTime) {
-            tm->expireFunc(data, tm->param);
-            
-            if (tm->isRunning) {
-                ListRemove(tm);
-
-                if (tm->type == TIMER_TYPE_PERIOD) {
-                    tm->expireTime = curTime + tm->duration;
-                    
-                    ListInsertSorted(tm, &(tmList->active), TimerCmpFunc);
-                } else {
-                    ListInsertSorted(tm, &(tmList->idle), TimerCmpFunc);
-                    
-                    tm->isRunning = 0;
-                }
+            expiredList[i++] = tm;
+            ListRemove(tm);
+            if (tm->type == TIMER_TYPE_PERIOD) {
+                tm->expireTime = curTime + tm->duration;
+                tm->isRunning = 1;
+                ListInsertSorted(tm, &(tmList->active), TimerCmpFunc);
+            } else {
+                tm->isRunning = 0;
+                ListInsertSorted(tm, &(tmList->idle), TimerCmpFunc);
             }
             tm = ListFirst(&(tmList->active));
         } else {
@@ -89,6 +89,16 @@ Status TimerExpireCheck(TimerList *tmList, uintptr_t data) {
         }
     }
     pthread_mutex_unlock(&tmList->lock);
+    expiredList[i] = NULL; // `i` is ensured to be less than `sizeof(expiredList)`
+
+    // send events for each expired timers
+    for (i = 0; i < sizeof(expiredList); i++) {
+        tm = expiredList[i];
+        if (tm == NULL)
+            break;
+        tm->expireFunc(data, tm->param);
+    }
+
     return STATUS_OK;
 }
 
@@ -165,4 +175,9 @@ Status TimerSet(int paramID, TimerBlkID id, uintptr_t param) {
     tm->param[paramID] = param;
     
     return STATUS_OK;
+}
+
+bool TimerIsExpired(TimerBlkID id) {
+    TimerBlk *tm = (TimerBlk *)id;
+    return tm->expireTime < TimeMsec(TimeNow());
 }

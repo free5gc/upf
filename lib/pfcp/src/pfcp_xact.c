@@ -664,7 +664,7 @@ Status PfcpXactTimeout(uint32_t index, uint32_t event, uint8_t *type) {
             PfcpXactDelete(xact);
             return STATUS_ERROR;            
         }
-    } else if (event == globalHoldingEvent) {
+    } else if (event == globalHoldingEvent && TimerIsExpired(xact->timerHolding)) {
         UTLT_Trace("[%d] %s Holding Timeout for step %d type %d peer [%s]:%d\n",
                 xact->transactionId, xact->origin == PFCP_LOCAL_ORIGINATOR ? "local" : "remote",
                 xact->step, xact->seq[xact->step-1].type,
