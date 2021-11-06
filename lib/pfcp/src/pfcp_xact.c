@@ -99,19 +99,21 @@ PfcpXact *PfcpXactLocalCreate(PfcpNode *gnode, PfcpHeader *header, Bufblk *bufBl
     }
     */
 
+    status = PfcpXactUpdateTx(xact, header, bufBlk);
+    UTLT_Assert(status == STATUS_OK, goto err, "Update Tx failed");
+
+    // Both of xact->gnode->localList and xact->gnode->remoteList had been already initialized in PfcpAddNode()
     if (xact->origin == PFCP_LOCAL_ORIGINATOR) {
         ListInsert(xact, &xact->gnode->localList);
     } else {
         ListInsert(xact, &xact->gnode->remoteList);
     }
 
-    status = PfcpXactUpdateTx(xact, header, bufBlk);
-    UTLT_Assert(status == STATUS_OK, goto err, "Update Tx failed");
-
     UTLT_Trace("[%d] %s Create peer [%s]:%d\n",
                xact->transactionId, xact->origin == PFCP_LOCAL_ORIGINATOR ?
                "local" : "remote",
-            GetIP(&gnode->sock->remoteAddr), GetPort(&gnode->sock->remoteAddr));
+               GetIP(&gnode->sock->remoteAddr), GetPort(&gnode->sock->remoteAddr));
+
     return xact;
 
 err:
@@ -151,11 +153,10 @@ PfcpXact *PfcpXactRemoteCreate(PfcpNode *gnode, uint32_t sqn) {
         xact->holdingReCount = PFCP_T3_DUPLICATED_RETRY_COUNT;
     }
 
+    // Both of xact->gnode->localList and xact->gnode->remoteList had been already initialized in PfcpAddNode()
     if (xact->origin == PFCP_LOCAL_ORIGINATOR) {
-        ListHeadInit(&xact->gnode->localList);
         ListInsert(xact, &xact->gnode->localList);
     } else {
-        ListHeadInit(&xact->gnode->remoteList);
         ListInsert(xact, &xact->gnode->remoteList);
     }
 
@@ -166,6 +167,9 @@ PfcpXact *PfcpXactRemoteCreate(PfcpNode *gnode, uint32_t sqn) {
     return xact;
 
 err:
+    if (xact->timerResponse) {
+        TimerDelete(xact->timerResponse);
+    }
     IndexFree(&pfcpXactPool, xact);
     return NULL;
 }
@@ -190,14 +194,12 @@ Status PfcpXactDelete(PfcpXact *xact) {
     UTLT_Trace("[%d] %s Delete  peer [%s]:%d\n", xact->transactionId,
             xact->origin == PFCP_LOCAL_ORIGINATOR ? "local" : "remote",
             GetIP(&xact->gnode->sock->remoteAddr), GetPort(&xact->gnode->sock->remoteAddr));
-    if (xact->origin == PFCP_LOCAL_ORIGINATOR) {
-        ListRemove(xact);
-    } else if (xact->origin == PFCP_REMOTE_ORIGINATOR) {
-        ListRemove(xact);
-    }
+
+    ListRemove(xact);
 
     xact->origin = 0;
     xact->transactionId = 0;
+    xact->gnode = NULL;
     xact->step = 0;
     xact->seq[0].type = 0;
     xact->seq[1].type = 0;
@@ -352,7 +354,7 @@ Status PfcpXactUpdateTx(PfcpXact *xact, PfcpHeader *header, Bufblk *bufBlk) {
     memset(localHeader, 0, headerLen);
     localHeader->version = PFCP_VERSION;
     localHeader->type = header->type;
-    if(header->type >= PFCP_SESSION_ESTABLISHMENT_REQUEST) { // with SEID
+    if (header->type >= PFCP_SESSION_ESTABLISHMENT_REQUEST) { // with SEID
         localHeader->seidP = 1;
         localHeader->seid = htobe64(header->seid);
         localHeader->sqn = PfcpTransactionId2Sqn(xact->transactionId);
@@ -709,7 +711,7 @@ Status PfcpXactReceive(PfcpNode *gnode, PfcpHeader *header, PfcpXact **xact) {
 
     status = PfcpXactUpdateRx(newXact, header->type);
     if (status != STATUS_OK) {
-        IndexFree(&pfcpXactPool, newXact);
+        PfcpXactDelete(newXact);
         return status;
     }
 

@@ -37,7 +37,7 @@ void UpfDispatcher(const Event *event) {
         UTLT_Assert(xact, BufblkFree(bufBlk); return, "pfcpXactLocalCreate error");
 
         status = PfcpXactCommit(xact);
-        UTLT_Assert(status == STATUS_OK, return, "xact commit error");
+        UTLT_Assert(status == STATUS_OK, PfcpXactDelete(xact); return, "xact commit error");
 
         break;
     }
@@ -133,6 +133,7 @@ void UpfDispatcher(const Event *event) {
             UTLT_Info("[PFCP] Handle PFCP session report response");
             UpfN4HandleSessionReportResponse(session, xact,
                                              &pfcpMessage->pFCPSessionReportResponse);
+            if (xact->gnode) PfcpXactDelete(xact);
             break;
         default:
             UTLT_Error("No implement pfcp type: %d", pfcpMessage->header.type);
