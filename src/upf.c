@@ -15,6 +15,7 @@ static void eventConsumer();
 
 int main(int argc, char *argv[]) {
     Status status, returnStatus = STATUS_OK;
+    pthread_mutex_init(&UTLT_logBufLock, 0);
 
     UTLT_Assert(parseArgs(argc, argv) == STATUS_OK, return STATUS_ERROR, 
                 "Error parsing args");
@@ -35,6 +36,7 @@ int main(int argc, char *argv[]) {
     UTLT_Assert(status == STATUS_OK, returnStatus = STATUS_ERROR,
                 "UPF terminate error");
 
+    pthread_mutex_destroy(&UTLT_logBufLock);
     return returnStatus;
 }
 

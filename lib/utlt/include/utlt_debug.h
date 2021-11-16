@@ -5,12 +5,15 @@
 extern "C" {
 #endif /* __cplusplus */
 
+#include <pthread.h>
 #include <string.h>
 
 typedef int Status;
 #define STATUS_ERROR -1
 #define STATUS_OK 0
 #define STATUS_EAGAIN 1
+
+extern pthread_mutex_t UTLT_logBufLock;
 
 Status UTLT_SetLogLevel(const char *level);
 Status UTLT_SetReportCaller(unsigned int reportCaller);
