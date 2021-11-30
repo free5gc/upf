@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 #include <pthread.h>
+#include <stdbool.h>
 
 #include "utlt_debug.h"
 #include "utlt_list.h"
@@ -48,6 +49,7 @@ Status TimerStop(TimerBlkID id);
 TimerBlkID TimerCreate(TimerList *tmList, int type, uint32_t duration, ExpireFunc expireFunc);
 void TimerDelete(TimerBlkID id);
 Status TimerSet(int paramID, TimerBlkID id, uintptr_t param);
+bool TimerIsExpired(TimerBlkID id);
 
 #ifdef __cplusplus
 }
