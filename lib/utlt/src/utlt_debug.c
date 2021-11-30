@@ -4,6 +4,8 @@
 #include <errno.h>
 #include <string.h>
 #include <stdarg.h>
+#include <ctype.h>
+#include <stdlib.h>
 
 #include "logger.h"
 #include "utlt_lib.h"
@@ -12,10 +14,48 @@
 #define MAX_SIZE_OF_BUFFER 32768
 
 unsigned int reportCaller = 0;
+pthread_mutex_t UTLT_logBufLock;
+static int logLevel = LOG_INFO;
+
+static void __lowerString(char *output, const char *input) {
+    size_t n = strlen(input);
+    size_t i;
+
+    for (i = 0; i < n; i++) {
+        output[i] = tolower(input[i]);
+    }
+    output[i] = '\0';
+}
 
 Status UTLT_SetLogLevel(const char *level) {
-    if (UpfUtilLog_SetLogLevel(UTLT_CStr2GoStr(level)))
+    if (UpfUtilLog_SetLogLevel(UTLT_CStr2GoStr(level))) {
+        char *lwrLevel = malloc(strlen(level)+1);
+        if (!lwrLevel)
+            return STATUS_ERROR;
+        __lowerString(lwrLevel, level);
+
+        if (!strcmp(lwrLevel, "panic"))
+            logLevel = LOG_PANIC;
+        else if (!strcmp(lwrLevel, "fatal"))
+            logLevel = LOG_FATAL;
+        else if (!strcmp(lwrLevel, "error"))
+            logLevel = LOG_ERROR;
+        else if (!strcmp(lwrLevel, "warning"))
+            logLevel = LOG_WARNING;
+        else if (!strcmp(lwrLevel, "info"))
+            logLevel = LOG_INFO;
+        else if (!strcmp(lwrLevel, "debug"))
+            logLevel = LOG_DEBUG;
+        else if (!strcmp(lwrLevel, "trace"))
+            logLevel = LOG_TRACE;
+        else {
+            free(lwrLevel);
+            return STATUS_ERROR;
+        }
+
+        free(lwrLevel);
         return STATUS_OK;
+    }
     else
         return STATUS_ERROR;
 }
@@ -35,23 +75,27 @@ int UTLT_LogPrint(int level, const char *filename, const int line,
     char buffer[MAX_SIZE_OF_BUFFER];
 
     unsigned int cnt, vspCnt;
+    Status status = STATUS_OK;
+    if (level > logLevel) return status;
     va_list vl;
     va_start(vl, fmt);
+    pthread_mutex_lock(&UTLT_logBufLock);
     vspCnt = vsnprintf(buffer, sizeof(buffer), fmt, vl);
     if (vspCnt < 0) {
         fprintf(stderr, "vsnprintf in UTLT_LogPrint error : %s\n", strerror(errno));
-        va_end(vl);
-        return STATUS_ERROR;
+        status = STATUS_ERROR;
     } else if (vspCnt == 0) {
-        return STATUS_OK;
+        status = STATUS_OK;
     }
     va_end(vl);
+    if (status != STATUS_OK) goto unlockReturn;
 
     if (reportCaller == REPORTCALLER_TRUE) {
         cnt = snprintf(buffer + vspCnt, sizeof(buffer) - vspCnt, " (%s:%d %s)", filename, line, funcname);
         if (cnt < 0) {
             fprintf(stderr, "sprintf in UTLT_LogPrint error : %s\n", strerror(errno));
-            return STATUS_ERROR;
+            status = STATUS_ERROR;
+            goto unlockReturn;
         }
     }
 
@@ -79,9 +123,12 @@ int UTLT_LogPrint(int level, const char *filename, const int line,
             break;
         default :
             fprintf(stderr, "The log level %d is out of range.\n", level);
-            return STATUS_ERROR;
+            status = STATUS_ERROR;
     }
-    return STATUS_OK;
+
+unlockReturn:
+    pthread_mutex_unlock(&UTLT_logBufLock);
+    return status;
 }
 
 const char *UTLT_StrStatus(Status status) {
