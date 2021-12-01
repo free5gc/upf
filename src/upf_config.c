@@ -223,6 +223,9 @@ Status UpfConfigParse() {
                             EnvParamsAddDNN(Self()->envParams, dnn);
                         }
                     } while (YamlIterType(&dnnList) == YAML_SEQUENCE_NODE);
+                } else if (!strcmp(upfKey, "packetBufferHoldTime")) {
+                    const char *holdTime = YamlIterGet(&upfIter, GET_VALUE);
+                    Self()->pktbufHoldTime = atoi(holdTime);
                 } else
                     UTLT_Warning("Unknown key \"%s\" of configuration", upfKey);
             }

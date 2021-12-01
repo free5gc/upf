@@ -118,6 +118,8 @@ typedef struct {
     // Buffering socket for recv packet from kernel
     Sock            *buffSock;
 
+#define DEFAULT_PKTBUF_HOLDING_TIME 30
+    uint16_t        pktbufHoldTime;
 
     // Config file
     const char      *configFilePath;

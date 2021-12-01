@@ -394,11 +394,30 @@ static int PacketInBufferHandle(uint8_t *pkt, uint16_t pktlen, UPDK_PDR *matched
         UTLT_Assert(!pthread_spin_lock(&Self()->buffLock), return -1,
                     "spin lock buffLock error");
 
+        utime_t now = TimeNow();
+        if (packetStorage->packetBuffer) {
+            utime_t prev = *(utime_t *)packetStorage->packetBuffer->buf;
+            if ((now - prev) > Self()->pktbufHoldTime * USEC_PER_SEC || now < prev)  {
+                // drop buffered packets if current time is later more than configured time in sec from the time the first packet buffered in
+                BufblkFree(packetStorage->packetBuffer);
+                packetStorage->packetBuffer = NULL;
+                UTLT_Debug("packet buffer is cleard.");
+            }
+        }
+
         if (!packetStorage->packetBuffer) {
             // if packetBuffer null, allocate space
             // reuse the pktbuf, so don't free it
             packetStorage->packetBuffer = BufblkAlloc(1, MAX_SIZE_OF_PACKET);
             UTLT_Assert(packetStorage->packetBuffer, goto unlockErrorReturn, "UpfBufPacket alloc failed");
+
+            // store the time the first packet buffered in into the head of the packetBuffer
+            BufblkBytes(packetStorage->packetBuffer, (const char *)&now, sizeof(now));
+            UTLT_Debug("store packet buffering time into the head of the packetBuffer.");
+        } else {
+            // buffer packet data but prevent PFCP Session Report request
+            action &= ~PFCP_FAR_APPLY_ACTION_NOCP;
+            UTLT_Debug("prevent PFCP session report request.");
         }
 
         if (BufIsNotEnough(packetStorage->packetBuffer, 1, sizeof(pktlen) + pktlen)) {
