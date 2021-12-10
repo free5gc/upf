@@ -84,13 +84,17 @@ PfcpXact *PfcpXactLocalCreate(PfcpNode *gnode, PfcpHeader *header, Bufblk *bufBl
         globalXactId = PFCP_MIN_XACT_ID;
     xact->transactionId = globalXactId++;
 
-    /*TODO: fix this
     if (globalResponseEvent) {
-        xact->timerResponse = EventTimerCreate(globalTimerList, TIMER_TYPE_ONCE, PFCP_T3_RESPONSE_DURATION);
-        UTLT_Assert(xact->timerResponse, return NULL, "Timer allocation failed");
-        TimerSet(PARAM1, xact->timerHolding, xact->index);
-        xact->responseReCount = PFCP_T3_DUPLICATED_RETRY_COUNT;
+        xact->timerResponse = EventTimerCreate(
+                                globalTimerList, TIMER_TYPE_ONCE,
+                                PFCP_T3_RESPONSE_DURATION,
+                                globalResponseEvent);
+        UTLT_Assert(xact->timerResponse, goto err, "Timer allocation failed");
+        TimerSet(PARAM2, xact->timerResponse, xact->index);
+        xact->responseReCount = PFCP_T3_RESPONSE_RETRY_COUNT;
     }
+
+    /*TODO: fix this
     if (globalHoldingEvent) {
         xact->timerHolding = EventTimerCreate(globalTimerList, TIMER_TYPE_ONCE, PFCP_T3_DUPLICATED_DURATION);
         UTLT_Assert(xact->timerHolding, return NULL, "Timer allocation failed");
@@ -133,16 +137,6 @@ PfcpXact *PfcpXactRemoteCreate(PfcpNode *gnode, uint32_t sqn) {
     xact->origin = PFCP_REMOTE_ORIGINATOR;
     xact->transactionId = PfcpSqn2TransactionId(sqn);
     xact->gnode = gnode;
-
-    if (globalResponseEvent) {
-        xact->timerResponse = EventTimerCreate(
-                                globalTimerList, TIMER_TYPE_ONCE,
-                                PFCP_T3_RESPONSE_DURATION,
-                                globalResponseEvent);
-        UTLT_Assert(xact->timerResponse, goto err, "Timer allocation failed");
-        TimerSet(PARAM2, xact->timerResponse, xact->index);
-        xact->responseReCount = PFCP_T3_RESPONSE_RETRY_COUNT;
-    }
 
     if (globalHoldingEvent) {
         xact->timerHolding = EventTimerCreate(globalTimerList,
@@ -305,6 +299,10 @@ Status PfcpXactUpdateTx(PfcpXact *xact, PfcpHeader *header, Bufblk *bufBlk) {
                             "local " : "remote", xact->step, header->type,
                             GetIP(&xact->gnode->sock->remoteAddr),
                             GetPort(&xact->gnode->sock->remoteAddr));
+
+                if (xact->timerResponse) {
+                    TimerStart(xact->timerResponse);
+                }
                 break;
             case PFCP_XACT_INTERMEDIATE_STAGE:
                 UTLT_Assert(0, return STATUS_ERROR, "invalid step(%d)", xact->step);
@@ -444,6 +442,10 @@ Status PfcpXactUpdateRx(PfcpXact *xact, uint8_t type) {
                             "local " : "remote", xact->step, type,
                             GetIP(&xact->gnode->sock->remoteAddr),
                             GetPort(&xact->gnode->sock->remoteAddr));
+
+                if (xact->timerResponse) {
+                    TimerStop(xact->timerResponse);
+                }
                 break;
             default:
                 UTLT_Assert(0, return STATUS_ERROR, "invalid step(%d)", xact->step);
@@ -515,10 +517,6 @@ Status PfcpXactUpdateRx(PfcpXact *xact, uint8_t type) {
         }
     } else {
         UTLT_Assert(0, return STATUS_ERROR, "invalid orginator(%d)", xact->origin);
-    }
-
-    if (xact->timerResponse) {
-        TimerStop(xact->timerResponse);
     }
 
     xact->seq[xact->step].type = type;
