@@ -7,6 +7,14 @@
 #include "utlt_list.h"
 #include "updk/rule_pdr.h"
 
+#define UP_TYPE_NUM 256
+#define up_dispatcher(type) goto *up_dispatch_table[type]
+#define up_table_assign(type, label) up_dispatch_table[type] = &&label
+#define up_table_assign_all(range, label) for(int count = 0; count < range; count++){\
+            up_table_assign(count, label);\
+            isInitialized = 1;\
+        }
+
 typedef struct {
     ListHead node;
 

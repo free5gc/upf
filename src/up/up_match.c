@@ -352,27 +352,41 @@ static int PacketInGTPUHandle(uint8_t *pkt, uint16_t pktlen, uint16_t hdrlen, ui
 
     Status status = STATUS_OK;
     Gtpv1Header *gtpHdr = (Gtpv1Header *) (pkt + hdrlen);
-    switch (gtpHdr->type) {
-        case GTPV1_T_PDU: // Should be the first to speed up UP packet matching
-            status = FindPDRByTEID(pkt, pktlen, sizeof(IPv4Header) + sizeof(UDPHeader), matchRule);
-            return (status == STATUS_OK ? 0 : -1);
-        case GTPV1_ECHO_REQUEST:
-            status = GtpHandleEchoRequest(sock, gtpHdr);
-            break;
-        case GTPV1_ECHO_RESPONSE:
-            status = GtpHandleEchoResponse(gtpHdr);
-            break;
-        case GTPV1_ERROR_INDICATION:
-            // TODO: Implement it if we need it
-            break;
-        case GTPV1_END_MARK:
-            // TODO : Need to deal with the UE packet that does not have tunnel yet
-            status = GtpHandleEndMark(sock, gtpHdr);
-            break;
-        default :
-            UTLT_Debug("This type[%d] of GTPv1 header does not implement yet", gtpHdr->type);
+
+    static void* up_dispatch_table[UP_TYPE_NUM];
+    static uint8_t isInitialized = 0;
+    
+    if(!isInitialized){
+        up_table_assign_all(UP_TYPE_NUM, LABEL_DEFAULT);
+        up_table_assign(GTPV1_T_PDU, LABEL_GTPV1_T_PDU);
+        up_table_assign(GTPV1_ECHO_REQUEST, LABEL_GTPV1_ECHO_REQUEST);
+        up_table_assign(GTPV1_ECHO_RESPONSE, LABEL_GTPV1_ECHO_RESPONSE);
+        up_table_assign(GTPV1_ERROR_INDICATION, LABEL_GTPV1_ERROR_INDICATION);
+        up_table_assign(GTPV1_END_MARK, LABEL_GTPV1_END_MARK);
     }
 
+    up_dispatcher(gtpHdr->type);
+    
+    LABEL_GTPV1_T_PDU:
+        status = FindPDRByTEID(pkt, pktlen, sizeof(IPv4Header) + sizeof(UDPHeader), matchRule);
+        goto end;
+    LABEL_GTPV1_ECHO_REQUEST:
+        status = GtpHandleEchoRequest(sock, gtpHdr);
+        goto end;
+    LABEL_GTPV1_ECHO_RESPONSE:
+        status = GtpHandleEchoResponse(gtpHdr);
+        goto end;
+    LABEL_GTPV1_ERROR_INDICATION:
+        // TODO: Implement it if we need it
+        goto end;
+    LABEL_GTPV1_END_MARK:
+        // TODO : Need to deal with the UE packet that does not have tunnel yet
+        status = GtpHandleEndMark(sock, gtpHdr);
+        goto end;
+    LABEL_DEFAULT:
+        UTLT_Debug("This type[%d] of GTPv1 header does not implement yet", gtpHdr->type);
+    
+    end:
     return (status == STATUS_OK ? 1 : -1);
 }
 
