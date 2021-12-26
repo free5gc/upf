@@ -144,6 +144,7 @@ Status UpfContextInit() {
     strncpy(self.buffSockPath, "/tmp/free5gc_unix_sock", MAX_SOCK_PATH_LEN);
     self.sessionHash = HashMake();
     self.bufPacketHash = HashMake();
+    self.pktbufHoldTime = DEFAULT_PKTBUF_HOLDING_TIME;
     // spin lock protect write data instead of mutex protect code block
     int ret = pthread_spin_init(&self.buffLock, PTHREAD_PROCESS_PRIVATE);
     UTLT_Assert(ret == 0, , "buffLock cannot create: %s", strerror(ret));

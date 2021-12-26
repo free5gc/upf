@@ -197,7 +197,7 @@ Status UpSendPacketByPdrFar(UpfPDR *pdr, UpfFAR *far, Sock *sock) {
             UTLT_Assert(sendBuf, status = STATUS_ERROR; goto FREEBUFBLK, "create buffer error");
             Bufblk *pktBuf = bufStorage->packetBuffer;
             uint16_t pktlen;
-            for (void *pktDataPtr = pktBuf->buf; pktDataPtr < pktBuf->buf + pktBuf->len; pktDataPtr += pktlen) {
+            for (void *pktDataPtr = pktBuf->buf + sizeof(utime_t); pktDataPtr < pktBuf->buf + pktBuf->len; pktDataPtr += pktlen) {
                 pktlen = *(uint16_t *)pktDataPtr;
                 gtpHdr._length = htons(pktlen);
                 BufblkBytes(sendBuf, (void *)&gtpHdr, GTPV1_HEADER_LEN); // This must succeed
