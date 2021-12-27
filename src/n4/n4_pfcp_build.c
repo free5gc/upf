@@ -69,21 +69,30 @@ Status UpfN4BuildSessionModificationResponse(Bufblk **bufBlkPtr, uint8_t type,
     PfcpMessage pfcpMessage;
     PFCPSessionModificationResponse *response = NULL;
     uint8_t cause;
-
+    bool sessionExisted = (session)?(true):(false);
     response = &pfcpMessage.pFCPSessionModificationResponse;
     memset(&pfcpMessage, 0, sizeof(pfcpMessage));
 
     /* cause */
+    if (sessionExisted) {
+        cause = PFCP_CAUSE_REQUEST_ACCEPTED;
+    } else {
+        cause = PFCP_CAUSE_SESSION_CONTEXT_NOT_FOUND;
+    }
     response->cause.presence = 1;
-    cause = PFCP_CAUSE_REQUEST_ACCEPTED;
     response->cause.value = &cause;
-    response->cause.len = 1;
-
+    response->cause.len = sizeof(cause);
+    
     /* TODO: Set Offending IE, Create PDR, Load Control Information, Overload Control Information, Usage Report, Failed Rule ID, Additional Usage Reports Information, Created/Updated Traffic Endpoint */
 
     pfcpMessage.header.type = type;
     pfcpMessage.header.seidP = 1;
-    pfcpMessage.header.seid = session->smfSeid;
+    if (sessionExisted) {
+        pfcpMessage.header.seid = session->smfSeid;
+    } else {
+        /* TS 29.244 Clause 7.2.2.4.2 Conditions for Sending SEID=0 in PFCP Header */
+        pfcpMessage.header.seid = 0;
+    }
     status = PfcpBuildMessage(bufBlkPtr, &pfcpMessage);
     UTLT_Assert(status == STATUS_OK, return STATUS_ERROR, "PFCP build error");
 

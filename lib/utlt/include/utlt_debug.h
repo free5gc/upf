@@ -13,6 +13,8 @@ typedef int Status;
 #define STATUS_OK 0
 #define STATUS_EAGAIN 1
 
+#define NOOP (void) 0
+
 extern pthread_mutex_t UTLT_logBufLock;
 
 Status UTLT_SetLogLevel(const char *level);
