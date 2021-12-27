@@ -102,24 +102,35 @@ Status UpfN4BuildSessionModificationResponse(Bufblk **bufBlkPtr, uint8_t type,
 
 Status UpfN4BuildSessionDeletionResponse(Bufblk **bufBlkPtr, uint8_t type,
                                          UpfSession *session,
-                                         PFCPSessionDeletionRequest *deletionRequest) {
+                                         PFCPSessionDeletionRequest *deletionRequest,
+                                         bool sessionExisted) {
     Status status;
     PfcpMessage pfcpMessage;
     PFCPSessionDeletionResponse *response = NULL;
     uint8_t cause;
-
+    
     response = &pfcpMessage.pFCPSessionDeletionResponse;
     memset(&pfcpMessage, 0, sizeof(PfcpMessage));
 
     /* cause */
+    if (sessionExisted) {
+        cause = PFCP_CAUSE_REQUEST_ACCEPTED;
+    } else {
+        cause = PFCP_CAUSE_SESSION_CONTEXT_NOT_FOUND;
+    }
     response->cause.presence = 1;
-    cause = PFCP_CAUSE_REQUEST_ACCEPTED;
     response->cause.value = &cause;
-    response->cause.len = 1;
+    response->cause.len = sizeof(cause);
 
     /* TODO: Set Offending IE, Load Control Information, Overload Control Information, Usage Report */
-
+    
     pfcpMessage.header.type = type;
+    if (!sessionExisted) {
+        /* TS 29.244 Clause 7.2.2.4.2 Conditions for Sending SEID=0 in PFCP Header */
+        pfcpMessage.header.seidP = 1;
+        pfcpMessage.header.seid = 0;
+    }
+
     status = PfcpBuildMessage(bufBlkPtr, &pfcpMessage);
     UTLT_Assert(status == STATUS_OK, return STATUS_ERROR, "PFCP build error");
 

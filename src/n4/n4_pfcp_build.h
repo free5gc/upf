@@ -18,7 +18,7 @@ Status UpfN4BuildSessionModificationResponse(
         PFCPSessionModificationRequest *modifyRequest);
 Status UpfN4BuildSessionDeletionResponse(
         Bufblk **bufBlkPtr, uint8_t type, UpfSession *session,
-        PFCPSessionDeletionRequest *deletionRequest);
+        PFCPSessionDeletionRequest *deletionRequest, bool sessionExisted);
 Status UpfN4BuildSessionReportRequestDownlinkDataReport (
         Bufblk **bufBlkPtr, uint8_t type, UpfSession *session, uint16_t pdrId);
 Status UpfN4BuildAssociationSetupResponse(

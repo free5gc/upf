@@ -1321,16 +1321,20 @@ Status UpfN4HandleSessionModificationRequest(UpfSession *session, PfcpXact *xact
 
 Status UpfN4HandleSessionDeletionRequest(UpfSession *session, PfcpXact *xact,
                                          PFCPSessionDeletionRequest *request) {
-    UTLT_Assert(session, return STATUS_ERROR, "session error");
     UTLT_Assert(xact, return STATUS_ERROR, "xact error");
 
     Status status;
     PfcpHeader header;
     Bufblk *bufBlk = NULL;
+    bool sessionExisted = (session)?(true):(false);
 
-    /* delete session */
-    UTLT_Assert(UpfSessionRemove(session) == STATUS_OK, return STATUS_ERROR,
-        "UpfSessionRemove failed");
+    if (sessionExisted) {
+        /* delete session */
+        UTLT_Assert(UpfSessionRemove(session) == STATUS_OK, return STATUS_ERROR,
+            "UpfSessionRemove failed");
+    } else {
+        UTLT_Warning("Session is not found");
+    }
 
     /* Send Session Deletion Response */
     memset(&header, 0, sizeof(PfcpHeader));
@@ -1339,7 +1343,7 @@ Status UpfN4HandleSessionDeletionRequest(UpfSession *session, PfcpXact *xact,
     header.seid = session->smfSeid;
 
     status = UpfN4BuildSessionDeletionResponse(&bufBlk, header.type,
-                                               session, request);
+                                               session, request, sessionExisted);
     UTLT_Assert(status == STATUS_OK, return STATUS_ERROR, "N4 build error");
 
     status = PfcpXactUpdateTx(xact, &header, bufBlk);
