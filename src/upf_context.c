@@ -130,6 +130,9 @@ Status UpfContextInit() {
 
     // Init Resource
     IndexInit(&upfSessionPool, MAX_POOL_OF_SESS);
+    for (int i = 0; i < MAX_POOL_OF_SESS; i++) {
+        upfSessionPool.pool[i].upfSeid = 0;
+    }
     RuleInit(PDR);
     RuleInit(FAR);
     RuleInit(QER);
@@ -647,6 +650,7 @@ Status UpfSessionRemove(UpfSession *session) {
     UpfURRListDeletionAndFreeWithGTPv1Tunnel(session);
     */
 
+    session->upfSeid = 0;
     IndexFree(&upfSessionPool, session);
 
     return STATUS_OK;
@@ -667,7 +671,11 @@ Status UpfSessionRemoveAll() {
 
 UpfSession *UpfSessionFind(uint32_t idx) {
     //UTLT_Assert(idx, return NULL, "index error");
-    return IndexFind(&upfSessionPool, idx);
+    UpfSession *session;
+    session = IndexFind(&upfSessionPool, idx);
+    if (session->upfSeid == 0)
+        return NULL;
+    return session;
 }
 
 UpfSession *UpfSessionFindBySeid(uint64_t seid) {
