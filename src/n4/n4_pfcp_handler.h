@@ -30,6 +30,7 @@ void UpfN4HandleAssociationUpdateRequest(PfcpXact *xact, PFCPAssociationUpdateRe
 void UpfN4HandleAssociationReleaseRequest(PfcpXact *xact, PFCPAssociationReleaseRequest *request);
 void UpfN4HandleHeartbeatRequest(PfcpXact *xact, HeartbeatRequest *request);
 void UpfN4HandleHeartbeatResponse(PfcpXact *xact, HeartbeatResponse *response);
+void UpfSendNoSessionRsp(PfcpMessage *pfcpMessage, PfcpNode *node);
 
 #ifdef __cplusplus
 }

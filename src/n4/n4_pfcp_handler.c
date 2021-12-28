@@ -9,6 +9,7 @@
 
 #include "upf_context.h"
 #include "pfcp_message.h"
+#include "pfcp_path.h"
 #include "pfcp_xact.h"
 #include "pfcp_convert.h"
 #include "n4_pfcp_build.h"
@@ -1313,6 +1314,55 @@ Status UpfN4HandleSessionModificationRequest(UpfSession *session, PfcpXact *xact
                 "PFCP Commit error");
 
     UTLT_Info("[PFCP] Session Modification Response");
+    return STATUS_OK;
+}
+
+Status UpfSendNoSessionRsp(PfcpMessage *pfcpMessage, PfcpNode *node){
+    Status status;
+    Bufblk *bufBlk;
+    uint8_t type;
+    uint32_t sqn = pfcpMessage->header.sqn;
+
+    switch (pfcpMessage->header.type) {
+        case PFCP_SESSION_MODIFICATION_REQUEST:
+            UTLT_Info("[PFCP] Handle PFCP session modification request");
+            type = PFCP_SESSION_MODIFICATION_RESPONSE;
+            status = UpfN4BuildSessionModificationResponse(&bufBlk, type, NULL, &pfcpMessage->pFCPSessionModificationRequest);
+            UTLT_Assert(status == STATUS_OK, return STATUS_ERROR,
+                "N4 build error");
+            break;
+        case PFCP_SESSION_DELETION_REQUEST:
+            UTLT_Info("[PFCP] Handle PFCP session deletion request");
+            type = PFCP_SESSION_DELETION_RESPONSE;
+            status = UpfN4BuildSessionDeletionResponse(&bufBlk, type, NULL, &pfcpMessage->pFCPSessionDeletionRequest);
+            UTLT_Assert(status == STATUS_OK, return STATUS_ERROR,
+                 "N4 build error");
+            break;
+        default:
+            UTLT_Error("No implement pfcp type: %d", pfcpMessage->header.type);
+            return STATUS_ERROR;
+        }
+
+    PfcpHeader *localHeader = NULL;
+    Bufblk *fullPacket = BufblkAlloc(1, PFCP_HEADER_LEN);
+    UTLT_Assert(fullPacket, return STATUS_ERROR, "buffer block alloc error");
+    localHeader = fullPacket->buf;
+    fullPacket->len = PFCP_HEADER_LEN;
+    memset(localHeader, 0, PFCP_HEADER_LEN);
+    localHeader->version = PFCP_VERSION;
+    localHeader->type = type;
+    localHeader->seidP = 1;
+    localHeader->seid = 0;
+    localHeader->sqn = sqn;
+
+    localHeader->length = htons(bufBlk->len + PFCP_HEADER_LEN - 4);
+
+    UTLT_Assert(BufblkBuf(fullPacket, bufBlk) == STATUS_OK, BufblkFree(fullPacket); return STATUS_ERROR, "buffer block buffering error");
+    status = PfcpSend(node, fullPacket);
+    BufblkFree(bufBlk);
+    BufblkFree(fullPacket);
+    UTLT_Assert(status == STATUS_OK, return STATUS_ERROR, "PfcpSend error");
+
     return STATUS_OK;
 }
 

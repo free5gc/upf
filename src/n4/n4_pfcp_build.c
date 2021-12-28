@@ -75,15 +75,17 @@ Status UpfN4BuildSessionModificationResponse(Bufblk **bufBlkPtr, uint8_t type,
 
     /* cause */
     response->cause.presence = 1;
-    cause = PFCP_CAUSE_REQUEST_ACCEPTED;
+    if (session) {
+        cause = PFCP_CAUSE_REQUEST_ACCEPTED;
+    } else {
+        cause = PFCP_CAUSE_SESSION_CONTEXT_NOT_FOUND;
+    }
     response->cause.value = &cause;
-    response->cause.len = 1;
+    response->cause.len = sizeof(cause);
 
     /* TODO: Set Offending IE, Create PDR, Load Control Information, Overload Control Information, Usage Report, Failed Rule ID, Additional Usage Reports Information, Created/Updated Traffic Endpoint */
 
     pfcpMessage.header.type = type;
-    pfcpMessage.header.seidP = 1;
-    pfcpMessage.header.seid = session->smfSeid;
     status = PfcpBuildMessage(bufBlkPtr, &pfcpMessage);
     UTLT_Assert(status == STATUS_OK, return STATUS_ERROR, "PFCP build error");
 
@@ -104,9 +106,13 @@ Status UpfN4BuildSessionDeletionResponse(Bufblk **bufBlkPtr, uint8_t type,
 
     /* cause */
     response->cause.presence = 1;
-    cause = PFCP_CAUSE_REQUEST_ACCEPTED;
+    if (session) {
+        cause = PFCP_CAUSE_REQUEST_ACCEPTED;
+    } else {
+        cause = PFCP_CAUSE_SESSION_CONTEXT_NOT_FOUND;
+    }
     response->cause.value = &cause;
-    response->cause.len = 1;
+    response->cause.len = sizeof(cause);
 
     /* TODO: Set Offending IE, Load Control Information, Overload Control Information, Usage Report */
 
