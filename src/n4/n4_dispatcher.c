@@ -75,11 +75,13 @@ void UpfDispatcher(const Event *event) {
                 session = UpfSessionFindBySeid(pfcpMessage->header.seid);
             }
 
-            UTLT_Level_Assert(LOG_WARNING, session, goto freeBuf,
+            UTLT_Level_Assert(LOG_WARNING, session, UpfSendNoSessionRsp(pfcpMessage, upf),
                         "do not find / establish session");
 
-            if (pfcpMessage->header.type != PFCP_SESSION_REPORT_RESPONSE) {
+            if (pfcpMessage->header.type != PFCP_SESSION_REPORT_RESPONSE && session) {
                 session->pfcpNode = upf;
+            } else {
+                goto freeBuf;
             }
 
             status = PfcpXactReceive(session->pfcpNode,
