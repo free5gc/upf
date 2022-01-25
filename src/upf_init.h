@@ -55,4 +55,16 @@ Status UpfTerm();
 
 Status UpfSetConfigPath(char *path);
 
+/**
+ * UpfSetNfLogPath - Set NF log path for init
+ */
+
+Status UpfSetNfLogPath(char *path);
+
+/**
+ * UpfSetLogPath - Set Free5gc log path for init
+ */
+
+Status UpfSetFree5gcLogPath(char *path);
+
 #endif /* __UPF_INIT_H__ */

@@ -70,6 +70,14 @@ Status UTLT_SetReportCaller(unsigned int flag) {
     return STATUS_OK;
 }
 
+Status UTIL_LogFileHook(const char *nfPath, const char *free5gcPath) {
+    if (UpfUtilLog_FileHook(UTLT_CStr2GoStr(nfPath), UTLT_CStr2GoStr(free5gcPath))) {
+        return STATUS_OK;
+    } else {
+        return STATUS_ERROR;
+    }
+}
+
 int UTLT_LogPrint(int level, const char *filename, const int line, 
                   const char *funcname, const char *fmt, ...) {
     char buffer[MAX_SIZE_OF_BUFFER];

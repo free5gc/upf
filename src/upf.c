@@ -12,6 +12,7 @@
 static Status parseArgs(int argc, char *argv[]);
 static Status checkPermission();
 static void eventConsumer();
+static void showHelp(_Bool breakLine);
 
 int main(int argc, char *argv[]) {
     Status status, returnStatus = STATUS_OK;
@@ -43,18 +44,38 @@ int main(int argc, char *argv[]) {
 static Status parseArgs(int argc, char *argv[]) {
     int opt;
 
-    while ((opt = getopt(argc, argv, "f:h")) != -1) {
+    while ((opt = getopt(argc, argv, "l:g:c:h")) != -1) {
         switch (opt) {
-            case 'f':
-                UpfSetConfigPath(optarg);
+            case 'l':
+                if (UpfSetNfLogPath(optarg) != STATUS_OK) {
+                    return STATUS_ERROR;
+                }
+                break;
+
+            case 'g':
+                if (UpfSetFree5gcLogPath(optarg) != STATUS_OK) {
+                    return STATUS_ERROR;
+                }
+                break;
+
+            case 'c':
+                if (UpfSetConfigPath(optarg) != STATUS_OK) {
+                    return STATUS_ERROR;
+                }
                 break;
 
             case 'h':
-                printf("Usage: %s [-f CONFIG_PATH]\n", argv[0]);
+                showHelp(0);
                 exit(0);
-            
+
             case '?':
-                UTLT_Error("Illigal option: %c", optopt); 
+                showHelp(1);
+                UTLT_Error("Illigal option: %c", optopt);
+                return STATUS_ERROR;
+
+            default:
+                showHelp(1);
+                UTLT_Error("Not supported option: %c", optopt);
                 return STATUS_ERROR;
         }
     }
@@ -89,3 +110,19 @@ static void eventConsumer() {
         UpfDispatcher(&event);
     }
 }
+
+static void showHelp(_Bool breakLine) {
+    if (breakLine) {
+        printf("\n");
+    }
+
+    printf("NAME:\n   upf - 5G User Plane Function (UPF)\n\n");
+    printf("USAGE:\n   main [global options] command [command options] [arguments...]\n\n");
+    printf("COMMANDS:\n   help, h  Shows a list of commands or help for one command\n\n");
+    printf("GLOBAL OPTIONS:\n");
+    printf("   -c FILE  Load configuration from FILE\n");
+    printf("   -l FILE  Output NF log to FILE\n");
+    printf("   -g FILE  Output free5gc log to FILE\n");
+    printf("   -h       show help\n");
+}
+

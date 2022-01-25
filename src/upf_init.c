@@ -44,6 +44,11 @@ static Status PfcpTerm(void *data);
 void PacketReceiverThread(ThreadID id, void *data);
 
 static char configFilePath[MAX_FILE_PATH_STRLEN] = "./config/upfcfg.yaml";
+static char nfLogFilePath[MAX_FILE_PATH_STRLEN] = "./log/upf.log";
+static char free5gcLogFilePath[MAX_FILE_PATH_STRLEN] = "";
+
+static pthread_mutex_t signalHandlerLock;
+static uint8_t signalHandlerFlag;
 
 UpfOps UpfOpsList[] = {
     {
@@ -150,12 +155,63 @@ UpfOps UpfOpsList[] = {
 };
 
 Status UpfSetConfigPath(char *path) {
+    if (path == NULL) {
+        UTLT_Error("Configuration is null point");
+        return STATUS_ERROR;
+    }
+
+    if (strlen(path) > (sizeof(configFilePath) - 1)) {
+        UTLT_Error("Configuration path length (%d) > buffer length (%d)", strlen(path), (sizeof(configFilePath) - 1));
+        return STATUS_ERROR;
+    }
     strcpy(configFilePath, path);
+    return STATUS_OK;
+}
+
+Status UpfSetNfLogPath(char *path) {
+    if (path == NULL) {
+        UTLT_Error("NF path is null point");
+        return STATUS_ERROR;
+    }
+
+    if (strlen(path) > (sizeof(nfLogFilePath) - 1)) {
+        UTLT_Error("NF log path length (%d) > buffer length (%d)", strlen(path), (sizeof(nfLogFilePath) - 1));
+        return STATUS_ERROR;
+    }
+    strcpy(nfLogFilePath, path);
+    return STATUS_OK;
+}
+
+Status UpfSetFree5gcLogPath(char *path) {
+    if (path == NULL) {
+        UTLT_Error("Free5gc path is null point");
+        return STATUS_ERROR;
+    }
+
+    if (strlen(path) > (sizeof(free5gcLogFilePath) - 1)) {
+        UTLT_Error("Free5GC log path length (%d) > buffer length (%d)", strlen(path), (sizeof(free5gcLogFilePath) - 1));
+        return STATUS_ERROR;
+    }
+    strcpy(free5gcLogFilePath, path);
     return STATUS_OK;
 }
 
 Status UpfInit() {
     Status status = STATUS_OK;
+
+    UTLT_Assert(UTIL_LogFileHook(nfLogFilePath, free5gcLogFilePath) == STATUS_OK,
+        return STATUS_ERROR, "Log file hool error, nf path: %s, free5gc path: %s", nfLogFilePath, free5gcLogFilePath);
+
+    if (strlen(free5gcLogFilePath) > 0) {
+        UTLT_Assert(GetAbsPath(free5gcLogFilePath) == STATUS_OK,
+            return STATUS_ERROR, "Invalid free5gc log path: %s", free5gcLogFilePath);
+        UTLT_Info("Free5GC log: %s", free5gcLogFilePath);
+    }
+    if (strlen(nfLogFilePath) > 0) {
+        UTLT_Assert(GetAbsPath(nfLogFilePath) == STATUS_OK,
+            return STATUS_ERROR, "Invalid UPF log path: %s", nfLogFilePath);
+        UTLT_Info("UPF log: %s", nfLogFilePath);
+    }
 
     UTLT_Assert(GetAbsPath(configFilePath) == STATUS_OK, 
         return STATUS_ERROR, "Invalid config path: %s", configFilePath);
@@ -166,7 +222,7 @@ Status UpfInit() {
             status = UpfOpsList[i].init(UpfOpsList[i].initData);
             UTLT_Assert(status == STATUS_OK, status |= STATUS_ERROR; break,
                 "%s error when UPF initializes", UpfOpsList[i].name);
-            
+
             UTLT_Trace("%s is finished in UPF initialization", UpfOpsList[i].name);
         }
     }
@@ -189,6 +245,13 @@ Status UpfTerm() {
 }
 
 static void SignalHandler(int sigval) {
+    pthread_mutex_lock(&signalHandlerLock);
+    if (signalHandlerFlag){
+        pthread_mutex_unlock(&signalHandlerLock);
+        return;
+    }
+    signalHandlerFlag = 1;
+
     switch(sigval) {
         case SIGINT :
             UTLT_Assert(UpfTerm() == STATUS_OK, , "Handle Ctrl-C fail");
@@ -203,6 +266,7 @@ static void SignalHandler(int sigval) {
 }
 
 static Status SignalRegister(void *data) {
+    signalHandlerFlag = 0;
     signal(SIGINT, SignalHandler);
     signal(SIGTERM, SignalHandler);
 
@@ -222,7 +286,7 @@ static Status ConfigHandle(void *data) {
 static Status EpollInit(void *data) {
     UTLT_Assert((Self()->epfd = EpollCreate()) >= 0,
         return STATUS_ERROR, "");
-    
+
     return STATUS_OK;
 }
 
@@ -251,7 +315,7 @@ static Status PacketRecvThreadInit(void *data) {
     
     UTLT_Assert(ThreadCreate(&Self()->pktRecvThread, threadFuncPtr, NULL) == STATUS_OK,
         return STATUS_ERROR, "");
-    
+
     return STATUS_OK;
 }
 

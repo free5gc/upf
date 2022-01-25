@@ -17,6 +17,7 @@ extern pthread_mutex_t UTLT_logBufLock;
 
 Status UTLT_SetLogLevel(const char *level);
 Status UTLT_SetReportCaller(unsigned int reportCaller);
+Status UTIL_LogFileHook(const char *nfPath, const char *free5gcPath);
 
 const char *UTLT_StrStatus(Status status);
 
