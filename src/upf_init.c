@@ -338,7 +338,10 @@ void PacketReceiverThread(ThreadID id, void *data) {
 
     while (!ThreadStop()) {
         nfds = EpollWait(Self()->epfd, events, 300);
-        UTLT_Assert(nfds >= 0, , "Epoll Wait error : %s", strerror(errno));
+        if (nfds < 0) {
+            UTLT_Assert(errno == EINTR, break, "Epoll Wait error : %s (%d)", strerror(errno), errno);
+            UTLT_Level_Assert(LOG_INFO, 0, usleep(1000), "Epool Wait : %s (%d)", strerror(errno), errno);
+        }
 
         for (int i = 0; i < nfds; i++) {
             sockPtr = events[i].data.ptr;

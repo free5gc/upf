@@ -66,8 +66,5 @@ int EpollWait(int epfd, struct epoll_event *epEvent, int timeout) {
     }
 
     int nfds = epoll_wait(epfd, epEvent, MAX_NUM_OF_EVENT, timeout);
-    UTLT_Assert(nfds >= 0, return -1, 
-                "Epoll Wait Error : %s", strerror(errno));
-    
     return nfds;
 }
