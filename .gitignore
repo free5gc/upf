@@ -61,6 +61,8 @@ lib/libgtp5gnl/tools/gtp5g-tunnel
 
 # Build destination
 build
+vendor
 
-# Tool,Chain
+# Tool,Chain,Editors
 TAGS
+.vscode
