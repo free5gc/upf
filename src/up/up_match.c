@@ -230,7 +230,7 @@ static int GTPUHeaderLen(uint8_t *pkt, uint16_t pktlen, uint16_t hdrlen) {
 
     if (*gtp1 & 0x04) {
         /* ext_hdr will always point to "Next ext hdr type" */
-        while (*(ext_hdr = gtp1 + rt_len - 1)) {
+        while (*(ext_hdr = gtp1 + rt_len - 1) && *(ext_hdr + 1)) {
             if (!PacketLenIsEnough(rt_len, remain_len))
                 return -1;
             rt_len += (*(++ext_hdr)) * 4;
@@ -352,9 +352,12 @@ static int PacketInGTPUHandle(uint8_t *pkt, uint16_t pktlen, uint16_t hdrlen, ui
 
     Status status = STATUS_OK;
     Gtpv1Header *gtpHdr = (Gtpv1Header *) (pkt + hdrlen);
+    uint16_t expected = ntohs(gtpHdr->_length) + sizeof(*gtpHdr);
+    UTLT_Level_Assert(LOG_WARNING, expected == (pktlen - hdrlen), return -1,
+                      "GTP-U payload length mismatch: expected:%u, gotten:%u", expected, (pktlen - hdrlen));
     switch (gtpHdr->type) {
         case GTPV1_T_PDU: // Should be the first to speed up UP packet matching
-            status = FindPDRByTEID(pkt, pktlen, sizeof(IPv4Header) + sizeof(UDPHeader), matchRule);
+            status = FindPDRByTEID(pkt, pktlen, 0, matchRule);
             return (status == STATUS_OK ? 0 : -1);
         case GTPV1_ECHO_REQUEST:
             status = GtpHandleEchoRequest(sock, gtpHdr);
