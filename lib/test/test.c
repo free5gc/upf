@@ -25,7 +25,7 @@ static TestCase utltTestList[] = {
 int main(int argc, char *argv[]) {
     //Status status;
 
-    UTLT_Assert(TestInit() == STATUS_OK, return -1, "TestInit fial");
+    UTLT_Assert(TestInit() == STATUS_OK, return -1, "TestInit fail");
     int sizeOfTestList = sizeof(utltTestList)/sizeof(TestCase);
     if (argc > 1) {
         for (int i = 1; i < argc; i++) {
@@ -38,7 +38,7 @@ int main(int argc, char *argv[]) {
 
     TestRun();
 
-    UTLT_Assert(TestTerminate() == STATUS_OK, return -1, "TestTerminate fial");
+    UTLT_Assert(TestTerminate() == STATUS_OK, return -1, "TestTerminate fail");
 
     return 0;
 }
