@@ -251,7 +251,7 @@ static void SignalHandler(int sigval) {
         return;
     }
     signalHandlerFlag = 1;
-
+    pthread_mutex_unlock(&signalHandlerLock);
     switch(sigval) {
         case SIGINT :
             UTLT_Assert(UpfTerm() == STATUS_OK, , "Handle Ctrl-C fail");
