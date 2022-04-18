@@ -19,14 +19,20 @@ Status TestInit() {
 }
 
 Status TestTerminate() {
+    int i = 0;
+    TestNode *it, *nextIt = NULL;
 
-    for (TestNode *it = ListFirst(&testSelf.node); it != NULL; it = ListNext(it)) {
+    ListForEachSafe(it, nextIt, &testSelf.node) {
+        UTLT_Info("Remove test node %d", i);
         ListRemove(it);
         free(it);
+        i++;
+        testSelf.finishCase--;
+        testSelf.totalCase--;
+
     }
 
-    testSelf.finishCase = 0;
-    testSelf.totalCase = 0;
+    UTLT_Assert(testSelf.totalCase == 0, return STATUS_ERROR, "");
 
     return STATUS_OK;
 }
