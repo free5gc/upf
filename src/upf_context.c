@@ -119,7 +119,11 @@ Status UpfContextInit() {
     ListHeadInit(&self.qerList);
     ListHeadInit(&self.urrList);
 
-    self.recoveryTime = htonl(time((time_t *)NULL));
+    // Octets 5 to 8 of Recovery Time Stamp IE are encoded in
+    // the same format as the first four octet of
+    // the 64-bit timestamp format as defined in
+    // clause 6 of IETF RFC 5905.
+    self.recoveryTime = htonl(time((time_t *)NULL) + 2208988800UL);
 
     // Set Default Value
     self.gtpDevNamePrefix = "upfgtp";
